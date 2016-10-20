@@ -1,0 +1,103 @@
+From 68b8cd307f3f99d68dcb96af3351ca7d708fbc1e Mon Sep 17 00:00:00 2001
+From: tewilove <tewilove@gmail.com>
+Date: Mon, 17 Oct 2016 20:42:11 +0800
+Subject: [PATCH 09/13] PA23: driver: spi
+
+Change-Id: I727db9b2d0cbcf83c7b7619f7b3fbeb300655787
+---
+ arch/arm/configs/pa23_defconfig |  1 +
+ drivers/spi/Kconfig             | 10 ++++++++++
+ drivers/spi/spi_qsd.c           | 13 +++++++++++++
+ include/linux/spi/spi.h         |  4 ++++
+ 4 files changed, 28 insertions(+)
+
+diff --git a/arch/arm/configs/pa23_defconfig b/arch/arm/configs/pa23_defconfig
+index c0c5de9..7bebd90 100644
+--- a/arch/arm/configs/pa23_defconfig
++++ b/arch/arm/configs/pa23_defconfig
+@@ -1825,6 +1825,7 @@ CONFIG_I2C_QUP=y
+ # CONFIG_I2C_DEBUG_BUS is not set
+ CONFIG_SPI=y
+ # CONFIG_SPI_DEBUG is not set
++CONFIG_SPI_CS_CHANGE_SH=y
+ CONFIG_SPI_MASTER=y
+ 
+ #
+diff --git a/drivers/spi/Kconfig b/drivers/spi/Kconfig
+index 6946b066..54053a1 100644
+--- a/drivers/spi/Kconfig
++++ b/drivers/spi/Kconfig
+@@ -35,6 +35,16 @@ config SPI_DEBUG
+ 	  Say "yes" to enable debug messaging (like dev_dbg and pr_debug),
+ 	  sysfs, and debugfs support in SPI controller and protocol drivers.
+ 
++config SPI_CS_CHANGE_SH
++    boolean "SPI customize cs_change"
++    depends on SHSYS_CUST
++    default y
++
++config SPI_DEASSERT_WAIT_SH
++    bool "SPI customize deassert wait"
++    depends on SHSYS_CUST
++    default y
++
+ #
+ # MASTER side ... talking to discrete SPI slave chips including microcontrollers
+ #
+diff --git a/drivers/spi/spi_qsd.c b/drivers/spi/spi_qsd.c
+index a3e2351..61c682b 100644
+--- a/drivers/spi/spi_qsd.c
++++ b/drivers/spi/spi_qsd.c
+@@ -1802,7 +1802,9 @@ static u32 msm_spi_set_spi_io_control(struct msm_spi *dd)
+ 	chip_select = dd->cur_msg->spi->chip_select << 2;
+ 	if ((spi_ioc & SPI_IO_C_CS_SELECT) != chip_select)
+ 		spi_ioc = (spi_ioc & ~SPI_IO_C_CS_SELECT) | chip_select;
++#ifndef CONFIG_SPI_CS_CHANGE_SH
+ 	if (!dd->cur_transfer->cs_change)
++#endif /* !CONFIG_SPI_CS_CHANGE_SH */
+ 		spi_ioc |= SPI_IO_C_MX_CS_MODE;
+ 
+ 	if (spi_ioc != spi_ioc_orig)
+@@ -1834,6 +1836,9 @@ static void msm_spi_process_transfer(struct msm_spi *dd)
+ 	u32 spi_ioc;
+ 	u32 int_loopback = 0;
+ 	int ret;
++#if defined( CONFIG_SPI_DEASSERT_WAIT_SH )
++    u32 deassert_wait = 0;
++#endif  /* CONFIG_SPI_DEASSERT_WAIT_SH */
+ 
+ 	dd->tx_bytes_remaining = dd->cur_msg_len;
+ 	dd->rx_bytes_remaining = dd->cur_msg_len;
+@@ -1904,6 +1909,14 @@ static void msm_spi_process_transfer(struct msm_spi *dd)
+ 	spi_ioc = msm_spi_set_spi_io_control(dd);
+ 	msm_spi_set_qup_op_mask(dd);
+ 
++#if defined( CONFIG_SPI_DEASSERT_WAIT_SH )
++    deassert_wait = dd->cur_transfer->deassert_wait * (max_speed / 1000) / 1000;
++    if (deassert_wait > 63) {
++        deassert_wait = 63;
++    }
++    writel_relaxed(deassert_wait, dd->base + SPI_DEASSERT_WAIT);
++#endif  /* CONFIG_SPI_DEASSERT_WAIT_SH */
++
+ 	if (dd->mode == SPI_DMOV_MODE) {
+ 		msm_spi_setup_dm_transfer(dd);
+ 		msm_spi_enqueue_dm_commands(dd);
+diff --git a/include/linux/spi/spi.h b/include/linux/spi/spi.h
+index 9d13091..d6bcdaa 100644
+--- a/include/linux/spi/spi.h
++++ b/include/linux/spi/spi.h
+@@ -507,6 +507,10 @@ struct spi_transfer {
+ 	u16		delay_usecs;
+ 	u32		speed_hz;
+ 
++#if defined( CONFIG_SPI_DEASSERT_WAIT_SH )
++    u16     deassert_wait;
++#endif  /* defined( CONFIG_SPI_DEASSERT_WAIT_SH ) */
++
+ 	struct list_head transfer_list;
+ };
+ 
+-- 
+2.10.0
+

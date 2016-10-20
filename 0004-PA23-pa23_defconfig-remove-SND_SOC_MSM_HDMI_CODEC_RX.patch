@@ -1,0 +1,38 @@
+From e51cdb24efe53e471d9fbad153bf635f7445bd26 Mon Sep 17 00:00:00 2001
+From: tewilove <tewilove@gmail.com>
+Date: Mon, 17 Oct 2016 11:19:50 +0800
+Subject: [PATCH 04/13] PA23: pa23_defconfig: remove SND_SOC_MSM_HDMI_CODEC_RX
+
+Change-Id: I86eaaa57913f1d86b4f8eedd194f327ca26ef700
+---
+ arch/arm/configs/pa23_defconfig | 1 -
+ sound/soc/msm/Kconfig           | 1 -
+ 2 files changed, 2 deletions(-)
+
+diff --git a/arch/arm/configs/pa23_defconfig b/arch/arm/configs/pa23_defconfig
+index aa5846a..c0c5de9 100644
+--- a/arch/arm/configs/pa23_defconfig
++++ b/arch/arm/configs/pa23_defconfig
+@@ -2823,7 +2823,6 @@ CONFIG_SND_SOC_I2C_AND_SPI=y
+ # CONFIG_SND_SOC_ALL_CODECS is not set
+ CONFIG_SND_SOC_WCD9320=y
+ CONFIG_SND_SOC_MSM_STUB=y
+-CONFIG_SND_SOC_MSM_HDMI_CODEC_RX=y
+ # CONFIG_SOUND_PRIME is not set
+ CONFIG_HID_SUPPORT=y
+ CONFIG_HID=y
+diff --git a/sound/soc/msm/Kconfig b/sound/soc/msm/Kconfig
+index fbcd953..db23225 100644
+--- a/sound/soc/msm/Kconfig
++++ b/sound/soc/msm/Kconfig
+@@ -198,7 +198,6 @@ config SND_SOC_APQ8074
+ 	select SND_SOC_MSM_STUB
+ 	select SND_SOC_MSM_HOSTLESS_PCM
+ 	select SND_SOC_WCD9320
+-	select SND_SOC_MSM_HDMI_CODEC_RX
+ 	select SND_DYNAMIC_MINORS
+ 	select AUDIO_OCMEM
+ 	help
+-- 
+2.10.0
+

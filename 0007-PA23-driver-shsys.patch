@@ -1,0 +1,2280 @@
+From 24efc44edb4870beedb9f2575d4657e859939fa5 Mon Sep 17 00:00:00 2001
+From: tewilove <tewilove@gmail.com>
+Date: Mon, 17 Oct 2016 12:14:16 +0800
+Subject: [PATCH 07/13] PA23: driver: shsys
+
+Change-Id: I0b2185c80a930c2ca21de9b3506acfd6260138b0
+---
+ drivers/Kconfig                    |   2 +
+ drivers/Makefile                   |   3 +
+ drivers/sharp/Kconfig              |  57 +++++
+ drivers/sharp/shsys/Makefile       |   6 +
+ drivers/sharp/shsys/sh_gpio.c      | 465 +++++++++++++++++++++++++++++++++++++
+ drivers/sharp/shsys/sh_regaxs.c    | 132 +++++++++++
+ drivers/sharp/shsys/sh_sleeplog.c  | 407 ++++++++++++++++++++++++++++++++
+ drivers/sharp/shsys/sh_sleeptest.c | 116 +++++++++
+ drivers/sharp/shsys/sh_smem.c      | 216 +++++++++++++++++
+ drivers/sharp/shsys/sh_systime.c   | 255 ++++++++++++++++++++
+ include/sharp/sh_gpio.h            | 101 ++++++++
+ include/sharp/sh_regaxs.h          |  36 +++
+ include/sharp/sh_sleeplog.h        |  41 ++++
+ include/sharp/sh_sleeptest.h       |  21 ++
+ include/sharp/sh_smem.h            | 114 +++++++++
+ include/sharp/sh_systime.h         | 165 +++++++++++++
+ 16 files changed, 2137 insertions(+)
+ create mode 100755 drivers/sharp/Kconfig
+ create mode 100644 drivers/sharp/shsys/Makefile
+ create mode 100644 drivers/sharp/shsys/sh_gpio.c
+ create mode 100644 drivers/sharp/shsys/sh_regaxs.c
+ create mode 100644 drivers/sharp/shsys/sh_sleeplog.c
+ create mode 100644 drivers/sharp/shsys/sh_sleeptest.c
+ create mode 100644 drivers/sharp/shsys/sh_smem.c
+ create mode 100644 drivers/sharp/shsys/sh_systime.c
+ create mode 100755 include/sharp/sh_gpio.h
+ create mode 100755 include/sharp/sh_regaxs.h
+ create mode 100644 include/sharp/sh_sleeplog.h
+ create mode 100644 include/sharp/sh_sleeptest.h
+ create mode 100644 include/sharp/sh_smem.h
+ create mode 100644 include/sharp/sh_systime.h
+
+diff --git a/drivers/Kconfig b/drivers/Kconfig
+index 72440c9..f934cd1 100644
+--- a/drivers/Kconfig
++++ b/drivers/Kconfig
+@@ -154,4 +154,6 @@ source "drivers/bif/Kconfig"
+ 
+ source "drivers/sensors/Kconfig"
+ 
++source "drivers/sharp/Kconfig"
++
+ endmenu
+diff --git a/drivers/Makefile b/drivers/Makefile
+index 867be8a..c873e6d 100644
+--- a/drivers/Makefile
++++ b/drivers/Makefile
+@@ -145,3 +145,6 @@ obj-$(CONFIG_CORESIGHT)		+= coresight/
+ 
+ obj-$(CONFIG_BIF)		+= bif/
+ obj-$(CONFIG_SENSORS)		+= sensors/
++
++# SHARP
++obj-$(CONFIG_SHSYS_CUST) += sharp/shsys/
+diff --git a/drivers/sharp/Kconfig b/drivers/sharp/Kconfig
+new file mode 100755
+index 0000000..dbd64ce
+--- /dev/null
++++ b/drivers/sharp/Kconfig
+@@ -0,0 +1,57 @@
++#
++# SHARP configuration
++#
++
++menu "SHARP Device Drivers"
++
++#source "drivers/sharp/mfc/Kconfig"
++
++#source "drivers/sharp/shdiag/Kconfig"
++#source "drivers/sharp/shmds/Kconfig"
++
++#CONFIG_SH_AUDIO_DRIVER-> 03-004
++#source "drivers/sharp/shaudio/Kconfig"
++#CONFIG_SH_AUDIO_DRIVER<- 03-004
++
++#source "drivers/sharp/tunerdrv/Kconfig"
++#source "drivers/sharp/tunerdrv_tmm/Kconfig"
++
++#source "drivers/sharp/btpm/Kconfig"
++#source "drivers/sharp/proximity/Kconfig"
++#source "drivers/sharp/shbatt/Kconfig"
++
++#source "drivers/sharp/shirda/Kconfig"
++
++#source "drivers/sharp/shterm/Kconfig"
++
++#source "drivers/sharp/shlog/Kconfig"
++
++#source "drivers/sharp/wifi/Kconfig"
++
++#source "drivers/sharp/bthid/Kconfig"
++
++#source "drivers/sharp/vold/Kconfig"
++
++#source "drivers/sharp/presenter/Kconfig"
++
++#source "drivers/sharp/shtimer/Kconfig"
++
++#source "drivers/sharp/shmhl/Kconfig"
++
++#source "drivers/sharp/wtap/Kconfig"
++
++#source "drivers/sharp/shdisp/Kconfig"
++
++#source "drivers/sharp/shcts/Kconfig"
++
++#source "drivers/sharp/shtps/Kconfig"
++
++#source "drivers/sharp/shcamled/Kconfig"
++
++#source "drivers/sharp/shirda/Kconfig"
++
++#source "drivers/sharp/shgrip/Kconfig"
++
++#source "drivers/sharp/shvibrator/Kconfig"
++
++endmenu
+diff --git a/drivers/sharp/shsys/Makefile b/drivers/sharp/shsys/Makefile
+new file mode 100644
+index 0000000..1bdc389
+--- /dev/null
++++ b/drivers/sharp/shsys/Makefile
+@@ -0,0 +1,6 @@
++obj-$(CONFIG_SHSYS_CUST) += sh_smem.o
++obj-$(CONFIG_ANDROID_ENGINEERING) += sh_regaxs.o
++obj-$(CONFIG_ANDROID_ENGINEERING) += sh_gpio.o
++obj-$(CONFIG_SHSYS_CUST) += sh_sleeptest.o
++obj-$(CONFIG_SHSYS_CUST) += sh_systime.o
++obj-$(CONFIG_SH_SLEEP_LOG) += sh_sleeplog.o
+diff --git a/drivers/sharp/shsys/sh_gpio.c b/drivers/sharp/shsys/sh_gpio.c
+new file mode 100644
+index 0000000..e08773b
+--- /dev/null
++++ b/drivers/sharp/shsys/sh_gpio.c
+@@ -0,0 +1,465 @@
++/* drivers/sharp/shsys/sh_gpiodump.c
++ *
++ * Copyright (C) 2012 Sharp Corporation
++ *
++ * This software is licensed under the terms of the GNU General Public
++ * License version 2, as published by the Free Software Foundation, and
++ * may be copied, distributed, and modified under those terms.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ */
++
++#include <linux/module.h>
++#include <linux/miscdevice.h>
++#include <linux/fs.h>
++#include <linux/io.h>
++#include <mach/msm_iomap.h>
++#include <mach/gpiomux.h>
++#include <asm/uaccess.h>
++#include <asm/io.h>
++#include <sharp/sh_gpio.h>
++#include <linux/gpio.h>
++#include <linux/qpnp/pin.h>
++
++/*
++ * Register Address
++ */
++#define SH_GPIO_CFG(n)    	(MSM_TLMM_BASE + 0x1000 + (0x10 * n))
++#define SH_GPIO_IN_OUT(n) 	(MSM_TLMM_BASE + 0x1004 + (0x10 * n))
++#define SH_GPIO_INTR_CFG(n) (MSM_TLMM_BASE + 0x1008 + (0x10 * n))
++
++
++#define HWIO_GPIO_CFGn_GPIO_OE_BMSK          0x200
++#define HWIO_GPIO_CFGn_GPIO_OE_SHFT          0x9
++#define HWIO_GPIO_CFGn_DRV_STRENGTH_BMSK     0x1c0
++#define HWIO_GPIO_CFGn_DRV_STRENGTH_SHFT     0x6
++#define HWIO_GPIO_CFGn_FUNC_SEL_BMSK         0x3c
++#define HWIO_GPIO_CFGn_FUNC_SEL_SHFT         0x2
++#define HWIO_GPIO_CFGn_GPIO_PULL_BMSK        0x3
++#define HWIO_GPIO_CFGn_GPIO_PULL_SHFT        0
++
++
++#define HWIO_GPIO_IN_OUTn_GPIO_OUT_BMSK      0x2
++#define HWIO_GPIO_IN_OUTn_GPIO_OUT_SHFT      0x1
++#define HWIO_GPIO_IN_OUTn_GPIO_IN_BMSK       0x1
++#define HWIO_GPIO_IN_OUTn_GPIO_IN_SHFT       0
++
++#define HWIO_GPIO_INTR_CFGn_INTR_RAW_STATUS_EN_BMSK    0x8
++#define HWIO_GPIO_INTR_CFGn_INTR_RAW_STATUS_EN_SHFT    0x3
++#define HWIO_GPIO_INTR_CFGn_INTR_DECT_CTL_BMSK         0x4
++#define HWIO_GPIO_INTR_CFGn_INTR_DECT_CTL_SHFT         0x2
++#define HWIO_GPIO_INTR_CFGn_INTR_POL_CTL_BMSK          0x2
++#define HWIO_GPIO_INTR_CFGn_INTR_POL_CTL_SHFT          0x1
++#define HWIO_GPIO_INTR_CFGn_INTR_ENABLE_BMSK           0x1
++#define HWIO_GPIO_INTR_CFGn_INTR_ENABLE_SHFT           0
++
++/*
++ * AMSS/MDM/modem_proc/core/sharp/shsys/src/sysprobe_gpio_dump.c
++ * AMSS/MDM/modem_proc/core/sharp/shsys/src/sysprobe_gpio_config.c
++ */
++/* --------------------------------------------------------------------------
++ *  Types
++ * --------------------------------------------------------------------------*/
++typedef enum
++{
++  HAL_TLMM_NO_PULL   = 0,
++  HAL_TLMM_PULL_DOWN = 1,
++  HAL_TLMM_KEEPER    = 2,
++  HAL_TLMM_PULL_UP   = 3
++}HAL_tlmm_PullType;
++
++typedef enum
++{
++  HAL_TLMM_INPUT  = 0,
++  HAL_TLMM_OUTPUT = 1,
++}HAL_tlmm_DirType;
++
++typedef enum
++{
++  HAL_TLMM_DRIVE_2MA  = 0,
++  HAL_TLMM_DRIVE_4MA  = 1,
++  HAL_TLMM_DRIVE_6MA  = 2,
++  HAL_TLMM_DRIVE_8MA  = 3,
++  HAL_TLMM_DRIVE_10MA = 4,
++  HAL_TLMM_DRIVE_12MA = 5,
++  HAL_TLMM_DRIVE_14MA = 6,
++  HAL_TLMM_DRIVE_16MA = 7
++}HAL_tlmm_DriveType;
++
++
++/* The enumeration for GPIO value(high or low) type. */
++typedef enum
++{
++    HAL_TLMM_LOW_VALUE  = 0,
++    HAL_TLMM_HIGH_VALUE = 1
++}HAL_tlmm_ValueType;
++
++#define HAL_TLMM_OUTPUT_LOW    (HAL_TLMM_LOW_VALUE | 0x2)
++#define HAL_TLMM_OUTPUT_HIGH   (HAL_TLMM_HIGH_VALUE | 0x2)
++
++
++/*
++ * See LINUX/android/hardware/sharp/shsys/sysprobe/sysprobe_v01.h
++ */
++typedef enum {
++  SYSPROBE_GPIOINT_TRIGGER_MIN_ENUM_VAL_V01 = -2147483647, /**< To force a 32 bit signed enum.  Do not change or use*/
++  SYSPROBE_GPIO_DUMP_GPIOINT_TRIGGER_HIGH_V01 = 0, 
++  SYSPROBE_GPIO_DUMP_GPIOINT_TRIGGER_LOW_V01 = 1, 
++  SYSPROBE_GPIO_DUMP_GPIOINT_TRIGGER_RISING_V01 = 2, 
++  SYSPROBE_GPIO_DUMP_GPIOINT_TRIGGER_FALLING_V01 = 3, 
++  SYSPROBE_GPIOINT_TRIGGER_MAX_ENUM_VAL_V01 = 2147483647 /**< To force a 32 bit signed enum.  Do not change or use*/
++}sysprobe_gpioint_trigger_v01;
++
++/* 
++ * source-fle-name : AMSS/MDM/modem_proc/core/sharp/shsys/src/sysprobe_gpio_dump.c
++ * function-name   : void sysprobe_gpio_dump_get_sysprobe_gpio_info(int gpio, sysprobe_gpio_info_v01 *info)
++ */
++static void sh_gpio_info(int gpio, struct sh_gpio_read_write *info)
++{
++    uint32_t config, in_out , intr ;
++    uint32_t val, enable , detect, polarity;
++
++    if (info == NULL) {
++        return;
++    }
++
++    info->gpio_config.gpio = gpio;
++
++	/*
++	 * GPIO configuration and control register 
++	 * GPIO_CFGn
++	 */
++ 	config 	= __raw_readl(SH_GPIO_CFG(gpio));
++    info->gpio_config.func =   ((config & HWIO_GPIO_CFGn_FUNC_SEL_BMSK)     >> HWIO_GPIO_CFGn_FUNC_SEL_SHFT);
++    info->gpio_config.dir  =   ((config & HWIO_GPIO_CFGn_GPIO_OE_BMSK)      >> HWIO_GPIO_CFGn_GPIO_OE_SHFT);
++    info->gpio_config.pull =   ((config & HWIO_GPIO_CFGn_GPIO_PULL_BMSK)    >> HWIO_GPIO_CFGn_GPIO_PULL_SHFT);
++    info->gpio_config.drvstr = ((config & HWIO_GPIO_CFGn_DRV_STRENGTH_BMSK) >> HWIO_GPIO_CFGn_DRV_STRENGTH_SHFT);
++
++	/*
++	 * GPIO_IN_OUTn
++	 */
++    in_out = __raw_readl(SH_GPIO_IN_OUT(gpio));;
++    if (info->gpio_config.dir == HAL_TLMM_INPUT) {
++        val = ((in_out & HWIO_GPIO_IN_OUTn_GPIO_IN_BMSK) >> HWIO_GPIO_IN_OUTn_GPIO_IN_SHFT);
++    }
++    else {
++        val = ((in_out & HWIO_GPIO_IN_OUTn_GPIO_OUT_BMSK) >> HWIO_GPIO_IN_OUTn_GPIO_OUT_SHFT);
++    }
++    if (val == 0) {
++        info->gpio_config.outval = HAL_TLMM_OUTPUT_LOW;
++    }
++    else {
++        info->gpio_config.outval = HAL_TLMM_OUTPUT_HIGH;
++    }
++
++   /*
++	* GPIO_INTR_CFGn
++	*/
++	
++	intr = __raw_readl(SH_GPIO_INTR_CFG(gpio));
++	
++	
++	/*
++	 * GPIO_INTR_CFGn
++	 */
++	enable = ( ( intr & HWIO_GPIO_INTR_CFGn_INTR_ENABLE_BMSK ) >> HWIO_GPIO_INTR_CFGn_INTR_ENABLE_SHFT);
++
++	/* INTR_ENABLE */
++    if ( enable == 0 ) {
++        info->gpioint_info.enable = 0;
++    }
++    else {
++        info->gpioint_info.enable = 1;
++    }
++
++ 	/* INTR_DECT_CTL,INTR_POL_CTL */
++    detect   = ( ( intr & HWIO_GPIO_INTR_CFGn_INTR_DECT_CTL_BMSK ) >> HWIO_GPIO_INTR_CFGn_INTR_DECT_CTL_SHFT) ;
++    polarity = ( ( intr & HWIO_GPIO_INTR_CFGn_INTR_POL_CTL_BMSK  ) >> HWIO_GPIO_INTR_CFGn_INTR_POL_CTL_SHFT ) ;
++    if (detect == 0) {
++		/* Level */
++        if (polarity == 0) {
++            info->gpioint_info.trigger = SYSPROBE_GPIO_DUMP_GPIOINT_TRIGGER_LOW_V01;
++        }
++        else {
++            info->gpioint_info.trigger = SYSPROBE_GPIO_DUMP_GPIOINT_TRIGGER_HIGH_V01;
++        }
++    }
++    else {
++ 		/* Edge */
++        if (polarity == 0) {
++            info->gpioint_info.trigger = SYSPROBE_GPIO_DUMP_GPIOINT_TRIGGER_FALLING_V01;
++        }
++        else {
++            info->gpioint_info.trigger = SYSPROBE_GPIO_DUMP_GPIOINT_TRIGGER_RISING_V01;
++        }
++    }
++}
++
++static int sh_gpio_open(struct inode *inode, struct file *filp)
++{
++    return 0;
++}
++
++static int sh_gpio_ioctl_read(unsigned long arg)
++{
++    int rc = 0;
++    struct sh_gpio_read_write gpio_req;
++
++    if (arg == 0) {
++        return -EINVAL;
++    }
++
++    if (copy_from_user(&gpio_req, (void __user *)arg, sizeof(gpio_req)) != 0) {
++        return -EINVAL;
++    }
++
++	sh_gpio_info(gpio_req.gpio_config.gpio, &gpio_req) ;
++
++	//printk("read: [%02d] func(%d) dir(%d) pull(%d) drvstr(%d) outval(%d) ena(%d) trg(%d)\n"
++	//	,(int)gpio_req.gpio_config.gpio
++	//	,(int)gpio_req.gpio_config.func
++	// 	,(int)gpio_req.gpio_config.dir
++	// 	,(int)gpio_req.gpio_config.pull
++	// 	,(int)gpio_req.gpio_config.drvstr
++	// 	,(int)gpio_req.gpio_config.outval
++	// 	,(int)gpio_req.gpioint_info.enable
++	// 	,(int)gpio_req.gpioint_info.trigger);
++
++    if (copy_to_user((u8*)arg, (u8*)&gpio_req, sizeof(gpio_req)) != 0) {
++        rc = -EFAULT;
++    }
++
++    return rc;
++}
++
++static int sh_gpio_ioctl_write(unsigned long arg)
++{
++    struct sh_gpio_read_write gpio_req;
++    struct sh_gpio_read_write current_info;
++    struct sh_gpio_read_write resp_config;
++    uint32_t gpio, func, dir, pull, drvstr, outval, config;
++	int	rc = 0 ;
++
++    if (arg == 0) {
++        return -EINVAL;
++    }
++
++    if (copy_from_user(&gpio_req, (void __user *)arg, sizeof(gpio_req)) != 0) {
++        printk("sh_gpio_ioctl_write: copy form user error\n");
++        return -EINVAL;
++    }
++
++	/*
++	 * Get Current GPIO Value
++	 */
++	sh_gpio_info(gpio_req.gpio_config.gpio, &current_info) ;
++
++	/*
++	 * Setting GPIO Value
++	 */
++	gpio = gpio_req.gpio_config.gpio ;
++
++    /* Function Value */
++    if (gpio_req.flag & SH_GPIO_CONFIG_BIT_FLAG_FUNC_V01) {
++        func = gpio_req.gpio_config.func;
++    }
++    else {
++        func = current_info.gpio_config.func;
++    }
++
++
++ 
++    /* Direction Value  */
++    if (gpio_req.flag & SH_GPIO_CONFIG_BIT_FLAG_DIR_V01) {
++        dir = gpio_req.gpio_config.dir;
++    }
++    else {
++        dir = current_info.gpio_config.dir;
++    }
++
++    /* Pull Value */
++    if (gpio_req.flag & SH_GPIO_CONFIG_BIT_FLAG_PULL_V01) {
++        pull = gpio_req.gpio_config.pull;
++    }
++    else {
++        pull = current_info.gpio_config.pull;
++    }
++  
++    /* DriverStrength Value */
++    if (gpio_req.flag & SH_GPIO_CONFIG_BIT_FLAG_DRIVE_V01) {
++        drvstr = gpio_req.gpio_config.drvstr;
++    }
++    else {
++        drvstr = current_info.gpio_config.drvstr;
++    }
++
++	/*
++	 * Write GPIO Value
++	 */
++	config = (dir << 9) | (drvstr << 6) | (func << 2) | pull;
++
++    /* OutValue */
++    if (gpio_req.flag & SH_GPIO_CONFIG_BIT_FLAG_RMT_V01) {
++        outval = gpio_req.gpio_config.outval;
++		if (func == GPIOMUX_FUNC_GPIO) {					/* GPIO Mode */
++			config |= outval > GPIOMUX_IN ? BIT(9) : 0;		/* Output Enable ON */
++		}
++    }
++    else {
++        outval = current_info.gpio_config.outval;
++    }
++	__raw_writel(config, SH_GPIO_CFG(gpio));
++
++	if (func == GPIOMUX_FUNC_GPIO) {
++    	if (gpio_req.flag & SH_GPIO_CONFIG_BIT_FLAG_RMT_V01) {
++			__raw_writel(dir == GPIOMUX_OUT_HIGH ? BIT(1) : 0,
++				SH_GPIO_IN_OUT(gpio));
++		}
++	}
++
++	mb();
++
++	/*
++	 * Response
++	 */
++	sh_gpio_info(gpio, &resp_config) ;
++    if (copy_to_user((u8*)arg, (u8*)&resp_config, sizeof(resp_config)) != 0) {
++        printk("sh_gpio_ioctl_write: copy to user error\n");
++        rc = -EFAULT;
++    }
++
++    return rc;
++}
++
++static int sh_gpio_ioctl_write_pmic_gpio(unsigned long arg)
++{
++    int rc = 0;
++    struct sh_qpnp_gpio gpio_req;
++	struct qpnp_pin_cfg	pin_cfg;
++
++    if (arg == 0) {
++        printk("sh_gpio_ioctl_write_pmic_gpio: paramter error (%d line)\n", __LINE__);
++        return -EINVAL;
++    }
++
++    if (copy_from_user(&gpio_req, (void __user *)arg, sizeof(struct sh_qpnp_gpio)) != 0) {
++        printk("sh_gpio_ioctl_write_pmic_gpio: copy_from_user() error (%d line)\n", __LINE__);
++        return -EINVAL;
++    }
++
++	pin_cfg.mode		= gpio_req.mode			;
++	pin_cfg.output_type	= gpio_req.output_type	;
++	pin_cfg.invert		= gpio_req.invert		;
++	pin_cfg.pull		= gpio_req.pull			;
++	pin_cfg.vin_sel		= gpio_req.vin_sel		;
++	pin_cfg.out_strength= gpio_req.out_strength;
++	pin_cfg.src_sel		= gpio_req.src_sel		;
++	pin_cfg.master_en	= gpio_req.master_en	;
++	pin_cfg.aout_ref	= gpio_req.aout_ref	;
++	pin_cfg.ain_route	= gpio_req.ain_route	;
++	pin_cfg.cs_out		= gpio_req.cs_out		;
++
++
++	rc = gpio_request( gpio_req.gpio , "sysprobe" );
++	if ( rc != -EBUSY ) {
++		gpio_free(gpio_req.gpio);
++		rc = gpio_request( gpio_req.gpio , "sysprobe");
++		if ( rc ) {
++        	printk("sh_gpio_ioctl_write_pmic_gpio: gpio_request() error rc(%d)\n", rc);
++			return rc ;
++		}
++	}
++
++	if ( pin_cfg.mode  == QPNP_PIN_MODE_DIG_IN  ) {
++		rc = gpio_direction_input(gpio_req.gpio );
++	} else 
++	if ( pin_cfg.mode  == QPNP_PIN_MODE_DIG_OUT ) {
++		rc = gpio_direction_output(gpio_req.gpio , gpio_req.out_strength) ;
++	}
++	if ( rc ) {
++       	printk("sh_gpio_ioctl_write_pmic_gpio: gpio_direction_xxxx() error rc(%d)\n", rc);
++		return rc ;
++	}
++
++	if ( gpio_cansleep(gpio_req.gpio) ) {
++		/* Effectively */
++		gpio_set_value_cansleep(gpio_req.gpio , gpio_req.out_strength );
++	} else {
++		/* Invalidity */
++		gpio_set_value(gpio_req.gpio , gpio_req.out_strength );
++	}
++
++	//rc = qpnp_pin_config(gpio_req.gpio , &pin_cfg);
++	//if ( rc ) {
++    //    printk("sh_gpio_ioctl_write_pmic_gpio: qpnp_pin_config() error (%d)\n", rc);
++	//}
++
++	/*
++	 * Because GPIO using is deleted, I do not do the free of GPIO
++	 *
++	 * gpio_free(gpio_req.gpio);
++	 */
++
++    return rc;
++}
++static long sh_gpio_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
++{
++    int rc = 0;
++
++    switch (cmd) {
++    case SH_GPIO_READ:
++        rc = sh_gpio_ioctl_read(arg);
++        break;
++    case SH_GPIO_WRITE:
++        rc = sh_gpio_ioctl_write(arg);
++        break;
++   case SH_GPIO_WRITE_PMIC_GPIO:
++        rc = sh_gpio_ioctl_write_pmic_gpio(arg);
++        break;
++    default:
++        printk("sh_gpio_ioctl: paramter error %d\n", cmd);
++        rc = -EPERM;
++        break;
++    }
++    return rc;
++}
++
++static int sh_gpio_release(struct inode *inode, struct file *filp)
++{
++    return 0;
++}
++
++static struct file_operations sh_gpio_fops = {
++    .owner          = THIS_MODULE,
++    .open           = sh_gpio_open,
++    .release        = sh_gpio_release,
++    .unlocked_ioctl = sh_gpio_ioctl,
++};
++
++static struct miscdevice sh_gpio_dev = {
++    .minor = MISC_DYNAMIC_MINOR,
++    .name = "sh_gpio",
++    .fops = &sh_gpio_fops,
++};
++
++static int __init sh_gpio_init( void )
++{
++    int ret;
++
++    ret = misc_register(&sh_gpio_dev);
++    if (ret != 0) {
++        printk("sh_gpio_init: fail to misc_register ret %d\n", ret);
++    }
++
++    return ret;
++}
++
++module_init(sh_gpio_init);
++
++MODULE_DESCRIPTION("sh_gpio");
++MODULE_LICENSE("GPL v2");
++
+diff --git a/drivers/sharp/shsys/sh_regaxs.c b/drivers/sharp/shsys/sh_regaxs.c
+new file mode 100644
+index 0000000..d3e355c
+--- /dev/null
++++ b/drivers/sharp/shsys/sh_regaxs.c
+@@ -0,0 +1,132 @@
++/* drivers/sharp/shsys/sh_regaxs.c
++ *
++ * Copyright (C) 2012 Sharp Corporation
++ *
++ * This software is licensed under the terms of the GNU General Public
++ * License version 2, as published by the Free Software Foundation, and
++ * may be copied, distributed, and modified under those terms.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ */
++
++#include <linux/module.h>
++#include <linux/miscdevice.h>
++#include <linux/fs.h>
++#include <asm/uaccess.h>
++
++#include <linux/io.h>
++#include <asm/io.h>
++
++#include <sharp/sh_regaxs.h>
++
++static int sh_regaxs_open(struct inode *inode, struct file *filp)
++{
++    return 0;
++}
++
++static int sh_regaxs_ioctl_read(unsigned long arg)
++{
++    int rc = 0;
++    struct sh_regaxs_read_write regaxs_req;
++    void __iomem *regadr = NULL;
++
++    if (arg == 0) {
++        return -EINVAL;
++    }
++
++    if (copy_from_user(&regaxs_req, (void __user *)arg, sizeof(regaxs_req)) != 0) {
++        return -EINVAL;
++    }
++
++    regadr = ioremap_nocache(regaxs_req.physaddr, 4);
++    regaxs_req.data = ioread32(regadr);
++
++    if (copy_to_user((u8*)arg, (u8*)&regaxs_req, sizeof(regaxs_req)) != 0) {
++        rc = -EFAULT;
++    }
++
++    if (regadr != NULL) {
++        iounmap(regadr);
++    }
++    return rc;
++}
++
++static int sh_regaxs_ioctl_write(unsigned long arg)
++{
++    struct sh_regaxs_read_write regaxs_req;
++    void __iomem *regadr = NULL;
++
++    if (arg == 0) {
++        return -EINVAL;
++    }
++
++    if (copy_from_user(&regaxs_req, (void __user *)arg, sizeof(regaxs_req)) != 0) {
++        return -EINVAL;
++    }
++
++    regadr = ioremap_nocache(regaxs_req.physaddr, 4);
++    iowrite32(regaxs_req.data, regadr);
++    if (regadr != NULL) {
++        iounmap(regadr);
++    }
++
++    return 0;
++}
++
++static long sh_regaxs_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
++{
++    int rc = 0;
++
++    switch (cmd) {
++    case SH_REGAXS_READ:
++        rc = sh_regaxs_ioctl_read(arg);
++        break;
++    case SH_REGAXS_WRITE:
++        rc = sh_regaxs_ioctl_write(arg);
++        break;
++    default:
++        rc = -EPERM;
++        break;
++    }
++    return rc;
++}
++
++static int sh_regaxs_release(struct inode *inode, struct file *filp)
++{
++    return 0;
++}
++
++static struct file_operations sh_regaxs_fops = {
++    .owner          = THIS_MODULE,
++    .open           = sh_regaxs_open,
++    .release        = sh_regaxs_release,
++    .unlocked_ioctl = sh_regaxs_ioctl,
++};
++
++static struct miscdevice sh_regaxs_dev = {
++    .minor = MISC_DYNAMIC_MINOR,
++    .name = "sh_regaxs",
++    .fops = &sh_regaxs_fops,
++};
++
++static int __init sh_regaxs_init( void )
++{
++    int ret;
++
++    ret = misc_register(&sh_regaxs_dev);
++    if (ret != 0) {
++        printk("sh_regaxs_init: fail to misc_register ret %d\n", ret);
++    }
++
++    return ret;
++}
++
++module_init(sh_regaxs_init);
++
++MODULE_DESCRIPTION("sh_regaxs");
++MODULE_LICENSE("GPL v2");
++
+diff --git a/drivers/sharp/shsys/sh_sleeplog.c b/drivers/sharp/shsys/sh_sleeplog.c
+new file mode 100644
+index 0000000..2b071a2
+--- /dev/null
++++ b/drivers/sharp/shsys/sh_sleeplog.c
+@@ -0,0 +1,407 @@
++/* drivers/sharp/shsys/sh_sleeplog.c
++ *
++ * Copyright (C) 2013 SHARP CORPORATION
++ *
++ * This software is licensed under the terms of the GNU General Public
++ * License version 2, as published by the Free Software Foundation, and
++ * may be copied, distributed, and modified under those terms.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ */
++
++#include <linux/init.h>
++#include <linux/module.h>
++#include <linux/types.h>
++#include <linux/device.h>
++#include <linux/rculist.h>
++#include <linux/pm_wakeup.h>
++#include <linux/miscdevice.h>
++#include <linux/fs.h>
++#include <linux/slab.h>
++#include <asm/uaccess.h>
++
++#include <sharp/sh_sleeplog.h>
++
++static spinlock_t lock;
++
++struct alarm_count{
++	int function;
++	int count;
++};
++struct alarm_count_chain{
++	struct list_head link;
++	struct alarm_count count;
++};
++#define MAX_ALARM_COUNT 30
++struct alarm_count_chain allocated_alarm_count[MAX_ALARM_COUNT];
++LIST_HEAD(alarm_list);
++
++#define MAX_WAKEUP_SOURCES_NAME 16
++#define MAX_WAKEUP_SOURCES_COUNT 150
++
++#define IRQ_TABLE_SIZE 1021
++#define PMIC_WAKEUP_GIC_IRQ 222
++static int sh_irq_count[IRQ_TABLE_SIZE];
++static bool sh_pmic_wakeup_flag;
++
++struct screen_state{
++	struct timespec time;
++	int state;
++};
++#define MAX_SCREEN_STATE_ARRAY 100
++struct screen_state screen_state_array[MAX_SCREEN_STATE_ARRAY];
++static int screen_state_write_point = 0;
++
++#define MAX_UID_STATS 100
++#define BAD_PROCESS_STRING "UNKNOWN"
++static int uid_stats_write_count = 0;
++
++#define ALARM_SIZE 180
++#define WAKEUP_SOURCES_SIZE 3600
++#define IRQ_SIZE 2042
++#define PM_STATS_SIZE 16
++#define SCREEN_STATE_SIZE 1000
++#define TCP_DUMP_SIZE 4200
++
++#define ALARM_OFFSET 0
++#define WAKEUP_SOURCES_OFFSET (ALARM_OFFSET + ALARM_SIZE)
++#define IRQ_OFFSET (WAKEUP_SOURCES_OFFSET + WAKEUP_SOURCES_SIZE)
++#define PM_STATS_OFFSET (IRQ_OFFSET + IRQ_SIZE)
++#define SCREEN_STATE_OFFSET (PM_STATS_OFFSET + PM_STATS_SIZE)
++#define TCP_DUMP_OFFSET (SCREEN_STATE_OFFSET + SCREEN_STATE_SIZE)
++
++#define BUFFER_SIZE (ALARM_SIZE + WAKEUP_SOURCES_SIZE + IRQ_SIZE + PM_STATS_SIZE + SCREEN_STATE_SIZE + TCP_DUMP_SIZE)
++
++static char *dump_buffer = NULL;
++static int dumped_size = 0;
++
++void sh_write_buffer_word(char *buffer, int value)
++{
++	unsigned short temp = value > 0x0000FFFF ? 0xFFFF : (unsigned short)value;
++	memcpy(buffer, &temp, 2);
++}
++
++static void sh_write_buffer_alarm_list(char *buffer){
++	struct list_head *pos;
++	
++	list_for_each(pos, &alarm_list){
++		struct alarm_count_chain *c = 
++			list_entry(pos, struct alarm_count_chain, link);
++		memcpy(buffer, &c->count.function, sizeof(int));
++		sh_write_buffer_word(buffer+sizeof(int), c->count.count);
++		buffer += sizeof(int) + sizeof(short);
++	}
++}
++
++void sh_write_buffer_wakeup_sources_internal(char *buffer, struct list_head *wakeup_sources)
++{
++	struct wakeup_source *ws;
++	ktime_t active_time;
++	unsigned long flags;
++	ktime_t total_time;
++	int copy_size;
++	int i = 0;
++
++	rcu_read_lock();
++	list_for_each_entry_rcu(ws, wakeup_sources, entry){
++		spin_lock_irqsave(&ws->lock, flags);
++		total_time = ws->total_time;
++		if (ws->active) {
++			ktime_t now = ktime_get();
++			active_time = ktime_sub(now, ws->last_time);
++			total_time = ktime_add(total_time, active_time);
++		}
++		copy_size = strlen(ws->name) < MAX_WAKEUP_SOURCES_NAME ? 
++			strlen(ws->name) : MAX_WAKEUP_SOURCES_NAME;
++		memcpy(buffer, &total_time, sizeof(ktime_t));
++		memcpy(buffer+sizeof(ktime_t), ws->name, copy_size);
++		spin_unlock_irqrestore(&ws->lock, flags);
++
++		buffer += sizeof(ktime_t) + MAX_WAKEUP_SOURCES_NAME;
++		i++;
++		if(i == MAX_WAKEUP_SOURCES_COUNT)
++			break;
++	}
++	rcu_read_unlock();
++}
++
++static void sh_write_buffer_irq_counter(char *buffer)
++{
++	int i = 0;
++
++	for(i=0; i<IRQ_TABLE_SIZE; i++){
++		sh_write_buffer_word(buffer, sh_irq_count[i]);
++		buffer += sizeof(short);
++	}
++}
++
++static void sh_write_buffer_pm_stats(char *buffer)
++{
++	int64_t suspend_result = sh_get_pm_stats_suspend();
++	int64_t idle_result = sh_get_pm_stats_idle();
++
++	memcpy(buffer, &suspend_result, sizeof(int64_t));
++	memcpy(buffer+sizeof(int64_t), &idle_result, sizeof(int64_t));
++}
++
++static void sh_write_buffer_screen_state(char *buffer){
++	int i = 0;
++
++	for(i=0; i<MAX_SCREEN_STATE_ARRAY; i++){
++		memcpy(buffer, &screen_state_array[i].time, sizeof(struct timespec));
++		sh_write_buffer_word(buffer + sizeof(struct timespec), screen_state_array[i].state);
++		buffer += sizeof(struct timespec) + sizeof(short);
++	}
++}
++
++char *sh_write_buffer_uid_stat_internal(char *buffer, 
++	uid_t uid, char *process_name, unsigned int tcp_rcv, unsigned int tcp_snd)
++{
++	sh_write_buffer_word(buffer, uid);
++	memcpy(buffer + sizeof(short), process_name, UID_STATS_MAX_PROCESS_NAME);
++	memcpy(buffer + sizeof(short) + UID_STATS_MAX_PROCESS_NAME,
++		 &tcp_rcv, sizeof(unsigned int));
++	memcpy(buffer + sizeof(short) + UID_STATS_MAX_PROCESS_NAME + sizeof(unsigned int),
++		 &tcp_snd, sizeof(unsigned int));
++	buffer += sizeof(short) + UID_STATS_MAX_PROCESS_NAME +
++		sizeof(unsigned int) + sizeof(unsigned int);
++
++	uid_stats_write_count++;
++	if(uid_stats_write_count > MAX_UID_STATS)
++		return 0;
++
++	return (char *)buffer;
++}
++
++static void init_data(void){
++	struct list_head *pos;
++	unsigned long flags;
++
++	spin_lock_irqsave(&lock, flags);
++	list_for_each(pos, &alarm_list){
++		struct alarm_count_chain *c;
++		c = list_entry(pos, struct alarm_count_chain, link);
++		c->count.count = 0;
++	}
++	memset(sh_irq_count, 0, sizeof(int) * IRQ_TABLE_SIZE);
++	memset(screen_state_array, 0, sizeof(screen_state_array));
++	spin_unlock_irqrestore(&lock, flags);
++}
++
++static int create_buffer(void)
++{
++	int size = PAGE_ALIGN(BUFFER_SIZE);
++	if(dump_buffer == NULL) {
++		if( (dump_buffer = kzalloc(size, GFP_KERNEL)) == NULL ){
++			pr_err("shsleeplog : fail to allocate buffer.\n");
++			return 0;
++		}
++	}
++	dumped_size = 0;
++
++	sh_write_buffer_alarm_list(dump_buffer);
++	sh_write_buffer_wakeup_sources(dump_buffer + WAKEUP_SOURCES_OFFSET);
++	sh_write_buffer_irq_counter(dump_buffer + IRQ_OFFSET);
++	sh_write_buffer_pm_stats(dump_buffer + PM_STATS_OFFSET);
++	sh_write_buffer_screen_state(dump_buffer + SCREEN_STATE_OFFSET);
++	uid_stats_write_count = 0;
++	sh_write_buffer_uid_stat(dump_buffer + TCP_DUMP_OFFSET);
++	init_data();
++
++	return size;
++}
++
++static void delete_buffer(void)
++{
++	if(dump_buffer != NULL) {
++		kfree(dump_buffer);
++		dump_buffer = NULL;
++	}
++}
++
++void sh_count_mark_alarm(enum android_alarm_type alarm_type, int function)
++{
++	struct list_head *pos;
++	int i = 0;
++	unsigned long flags;
++
++	if(alarm_type != ANDROID_ALARM_RTC_WAKEUP &&
++		alarm_type != ANDROID_ALARM_ELAPSED_REALTIME_WAKEUP)
++		return;
++	
++	list_for_each(pos, &alarm_list) {
++		struct alarm_count_chain *c;
++		c = list_entry(pos, struct alarm_count_chain, link);
++		if(c->count.function == function){
++			spin_lock_irqsave(&lock, flags);
++			c->count.count++;
++			spin_unlock_irqrestore(&lock, flags);
++			return;
++		}
++		i++;
++	}
++	
++	if(i < MAX_ALARM_COUNT){
++		spin_lock_irqsave(&lock, flags);
++		allocated_alarm_count[i].count.function = function;
++		allocated_alarm_count[i].count.count    = 1;
++		list_add_tail(&allocated_alarm_count[i].link, pos);
++		spin_unlock_irqrestore(&lock, flags);
++	}
++}
++
++static void sh_up_pmic_wakeup_flag(void)
++{
++	sh_pmic_wakeup_flag = true;
++}
++
++static bool sh_is_pmic_wakeup_flag(void)
++{
++	return sh_pmic_wakeup_flag;
++}
++
++static void sh_down_pmic_wakeup_flag(void)
++{
++	sh_pmic_wakeup_flag = false;
++}
++
++void sh_count_gic_counter(int irq)
++{
++	sh_count_irq_counter(irq);
++	if(irq == PMIC_WAKEUP_GIC_IRQ)
++		sh_up_pmic_wakeup_flag();
++}
++
++void sh_count_irq_counter(int irq)
++{
++	unsigned long flags;
++
++	if(irq >= 0 && irq < IRQ_TABLE_SIZE){
++		spin_lock_irqsave(&lock, flags);
++		sh_irq_count[irq]++;
++		spin_unlock_irqrestore(&lock, flags);
++	}
++}
++
++void sh_count_irq_if_pmic_wakeup(int irq)
++{
++	if(sh_is_pmic_wakeup_flag()){
++		sh_count_irq_counter(irq);
++		sh_down_pmic_wakeup_flag();
++	}
++}
++
++void sh_set_screen_state(struct timespec ts, suspend_state_t state)
++{
++	unsigned long flags;
++
++	spin_lock_irqsave(&lock, flags);
++	screen_state_array[screen_state_write_point].time = ts;
++	screen_state_array[screen_state_write_point].state =
++		state > PM_SUSPEND_ON ? 0 : 1;
++
++	screen_state_write_point =
++		(screen_state_write_point + 1) % MAX_SCREEN_STATE_ARRAY;
++	spin_unlock_irqrestore(&lock, flags);
++}
++
++void sh_get_process_name(struct task_struct *task, char *result_name)
++{
++	struct mm_struct *mm;
++	unsigned int len;
++
++	memset(result_name, 0, UID_STATS_MAX_PROCESS_NAME);
++	if(!task){
++		strncpy(result_name, BAD_PROCESS_STRING, strlen(BAD_PROCESS_STRING));
++		return;
++	}
++
++	mm = get_task_mm(task);
++
++	if (!mm || !mm->arg_end){
++		strncpy(result_name, BAD_PROCESS_STRING, strlen(BAD_PROCESS_STRING));
++	}else{
++		len = mm->arg_end - mm->arg_start < UID_STATS_MAX_PROCESS_NAME ? 
++			mm->arg_end - mm->arg_start : UID_STATS_MAX_PROCESS_NAME;
++		access_process_vm(task, mm->arg_start, result_name, len, 0);
++	}
++	if(mm){
++		mmput(mm);
++	}
++}
++
++static int sh_sleeplog_mmap(struct file *filep, struct vm_area_struct *vma)
++{
++	int ret = 0;
++	int size;
++	unsigned long pfn;
++	unsigned long offset = vma->vm_pgoff << PAGE_SHIFT;
++	unsigned long length = vma->vm_end - vma->vm_start;
++
++	size = create_buffer();
++	if(dump_buffer == NULL) return -EINVAL;
++	if( (offset >= size) || (length > (size - offset)) ) {
++		ret = -EINVAL;
++		goto exit_after_alloc;
++	}
++
++	vma->vm_flags |= VM_RESERVED;
++	pfn = virt_to_phys(dump_buffer + offset) >> PAGE_SHIFT;
++	if( (ret = remap_pfn_range(vma, vma->vm_start, pfn, length, vma->vm_page_prot)) != 0 ){
++		pr_err("shsleeplog : failed to remap : %d\n", ret);
++		ret = -EAGAIN;
++		goto exit_after_alloc;
++	}
++
++exit_after_alloc:
++	delete_buffer();
++
++	return ret;
++}
++
++static ssize_t sh_sleeplog_read(struct file *filp, char __user *buf, size_t count, loff_t *ppos)
++{
++	int size   = BUFFER_SIZE;
++
++	if (count == sizeof(int)) {
++		if(copy_to_user(buf, (void *)&size, sizeof(int)))
++			return -EFAULT;
++		return count;
++	}
++
++	return -EFAULT;
++}
++
++static struct file_operations sh_sleeplog_fops = {
++    .owner          = THIS_MODULE,
++    .mmap           = sh_sleeplog_mmap,
++    .read           = sh_sleeplog_read,
++};
++
++static struct miscdevice sh_sleeplog_dev = {
++    .minor = MISC_DYNAMIC_MINOR,
++    .name = "sh_sleeplog",
++    .fops = &sh_sleeplog_fops,
++};
++
++static int __init sh_sleeplog_init( void )
++{
++    int ret;
++    spin_lock_init(&lock);
++    ret = misc_register(&sh_sleeplog_dev);
++    return ret;
++}
++static void __exit sh_sleeplog_exit(void)
++{
++	misc_deregister(&sh_sleeplog_dev);
++}
++
++module_init(sh_sleeplog_init);
++module_exit(sh_sleeplog_exit);
++
++MODULE_DESCRIPTION("sh_sleeplog");
++MODULE_LICENSE("GPL v2");
+diff --git a/drivers/sharp/shsys/sh_sleeptest.c b/drivers/sharp/shsys/sh_sleeptest.c
+new file mode 100644
+index 0000000..a252f95
+--- /dev/null
++++ b/drivers/sharp/shsys/sh_sleeptest.c
+@@ -0,0 +1,116 @@
++/* drivers/sharp/shsys/sh_sleeptest.c
++ *
++ * Copyright (C) 2012 SHARP CORPORATION
++ *
++ * This software is licensed under the terms of the GNU General Public
++ * License version 2, as published by the Free Software Foundation, and
++ * may be copied, distributed, and modified under those terms.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ */
++
++#include <linux/init.h>
++#include <linux/module.h>
++#include <linux/types.h>
++#include <linux/device.h>
++#include <linux/platform_device.h>
++#include <sharp/sh_sleeptest.h>
++
++static int sleep_test_mode = 0;
++
++int sleep_test_is_enabled(void)
++{
++	return sleep_test_mode;
++}
++
++static ssize_t show_sleep_test_mode(struct device *dev, struct device_attribute *attr,
++				    char *buf)
++{
++	int len;
++
++	len = scnprintf(buf, PAGE_SIZE, "%d\n", sleep_test_mode);
++
++	return len;
++}
++
++static ssize_t store_sleep_test_mode(struct device *dev, struct device_attribute *attr,
++				     const char *buf, size_t count)
++{
++	long new_mode;
++
++	new_mode = simple_strtol(buf, NULL, 16);
++	sleep_test_mode = (new_mode) ? 1 : 0;
++
++	return count;
++}
++
++static DEVICE_ATTR(mode, S_IRUGO | S_IWUSR, show_sleep_test_mode, store_sleep_test_mode);
++
++static struct attribute *sh_sleeptest_attrs[] = {
++	&dev_attr_mode.attr,
++	NULL,
++};
++
++static struct attribute_group sh_sleeptest_attr_group = {
++	.attrs = sh_sleeptest_attrs,
++};
++
++static int sh_sleeptest_probe(struct platform_device *pdev)
++{
++	int err;
++
++	err = sysfs_create_group(&pdev->dev.kobj, &sh_sleeptest_attr_group);
++	if (err) {
++		return err;
++	}
++
++	return 0;
++}
++
++static int sh_sleeptest_remove(struct platform_device *pdev)
++{
++	sysfs_remove_group(&pdev->dev.kobj, &sh_sleeptest_attr_group);
++
++	return 0;
++}
++
++static struct platform_device sh_sleeptest_device = {
++	.name = "sh_sleeptest",
++	.id   = -1,
++};
++
++static struct platform_driver sh_sleeptest_driver = {
++	.probe	      = sh_sleeptest_probe,
++	.remove	      = sh_sleeptest_remove,
++	.driver	      = {
++		.name = "sh_sleeptest",
++	},
++};
++
++static int __init sh_sleeptest_init(void)
++{
++	platform_device_register(&sh_sleeptest_device);
++	platform_driver_register(&sh_sleeptest_driver);
++
++	return 0;
++}
++
++static void __exit sh_sleeptest_exit(void)
++{
++	platform_driver_unregister(&sh_sleeptest_driver);
++	platform_device_unregister(&sh_sleeptest_device);
++}
++
++module_init(sh_sleeptest_init);
++module_exit(sh_sleeptest_exit);
++
++EXPORT_SYMBOL(sleep_test_is_enabled);
++
++MODULE_DESCRIPTION("SHARP SLEEPTEST DRIVER MODULE");
++MODULE_LICENSE("GPL v2");
++MODULE_AUTHOR("SHARP CORPORATION");
++MODULE_VERSION("1.00");
+diff --git a/drivers/sharp/shsys/sh_smem.c b/drivers/sharp/shsys/sh_smem.c
+new file mode 100644
+index 0000000..8210cc6
+--- /dev/null
++++ b/drivers/sharp/shsys/sh_smem.c
+@@ -0,0 +1,216 @@
++/* drivers/sharp/shsys/sh_smem.c
++ *
++ * Copyright (C) 2013 Sharp Corporation
++ *
++ * This software is licensed under the terms of the GNU General Public
++ * License version 2, as published by the Free Software Foundation, and
++ * may be copied, distributed, and modified under those terms.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ */
++ 
++#include <linux/init.h>
++#include <linux/module.h>
++#include <linux/kernel.h>
++#include <linux/moduleparam.h>
++
++#include <../../../arch/arm/mach-msm/smd_private.h>
++#include <sharp/sh_smem.h>
++
++static int sh_smem_get_softupdate_flg_to_user(char *buffer, const struct kernel_param *kp);
++
++static sharp_smem_common_type *p_sharp_smem_common_type = NULL;
++static unsigned long *p_smem_sleep_power_collapse_disabled = NULL;
++static unsigned char softupdate_flg = 0;
++static struct kernel_param_ops param_ops_softupdate_flg = {
++	.get = sh_smem_get_softupdate_flg_to_user,
++};
++
++/*=============================================================================
++
++FUNCTION sh_smem_get_common_address
++
++=============================================================================*/
++sharp_smem_common_type *sh_smem_get_common_address( void )
++{
++    if (p_sharp_smem_common_type == NULL) {
++        p_sharp_smem_common_type = smem_alloc(SMEM_ID_VENDOR0, SH_SMEM_COMMON_SIZE);
++    }
++    
++    return p_sharp_smem_common_type;
++}
++EXPORT_SYMBOL(sh_smem_get_common_address);
++
++/*=============================================================================
++
++FUNCTION sh_smem_get_sleep_power_collapse_disabled_address
++
++DESCRIPTION
++
++DEPENDENCIES
++  None
++
++RETURN VALUE
++
++SIDE EFFECTS
++  None
++
++NOTE
++  None
++
++=============================================================================*/
++unsigned long *sh_smem_get_sleep_power_collapse_disabled_address( void )
++{
++    if (p_smem_sleep_power_collapse_disabled == NULL) {
++        p_smem_sleep_power_collapse_disabled = smem_alloc(SMEM_SLEEP_POWER_COLLAPSE_DISABLED, sizeof(unsigned long));
++    }
++    
++    return p_smem_sleep_power_collapse_disabled;
++}
++EXPORT_SYMBOL(sh_smem_get_sleep_power_collapse_disabled_address);
++
++/*=============================================================================
++
++FUNCTION sh_smem_get_100hflg
++
++DESCRIPTION
++
++DEPENDENCIES
++  None
++
++RETURN VALUE
++
++SIDE EFFECTS
++  None
++
++NOTE
++  None
++
++=============================================================================*/
++unsigned char sh_smem_get_100hflg( void )
++{
++    if (p_sharp_smem_common_type == NULL) {
++        p_sharp_smem_common_type = sh_smem_get_common_address();
++    }
++    
++    return p_sharp_smem_common_type->sh_100hflg;
++}
++EXPORT_SYMBOL(sh_smem_get_100hflg);
++
++/*=============================================================================
++
++FUNCTION sh_smem_get_softupdate_flg
++
++DESCRIPTION
++
++DEPENDENCIES
++  None
++
++RETURN VALUE
++
++SIDE EFFECTS
++  None
++
++NOTE
++  None
++
++=============================================================================*/
++unsigned char sh_smem_get_softupdate_flg( void )
++{
++    if (p_sharp_smem_common_type == NULL) {
++        p_sharp_smem_common_type = sh_smem_get_common_address();
++    }
++    
++    return p_sharp_smem_common_type->shusb_softupdate_mode_flag;
++}
++EXPORT_SYMBOL(sh_smem_get_softupdate_flg);
++
++/*=============================================================================
++
++FUNCTION sh_smem_get_softupdate_flg_to_user
++
++DESCRIPTION
++
++DEPENDENCIES
++  None
++
++RETURN VALUE
++
++SIDE EFFECTS
++  None
++
++NOTE
++  None
++
++=============================================================================*/
++static int sh_smem_get_softupdate_flg_to_user(char *buffer, const struct kernel_param *kp)
++{
++    int ret = 0;
++
++    softupdate_flg = sh_smem_get_softupdate_flg();
++    ret = param_get_int(buffer, kp);
++
++    return ret;
++}
++module_param_cb(softupdate_flg, &param_ops_softupdate_flg, &softupdate_flg, 0644);
++
++/*=============================================================================
++
++FUNCTION sh_smem_get_fota_boot_mode
++
++DESCRIPTION
++
++DEPENDENCIES
++  None
++
++RETURN VALUE
++
++SIDE EFFECTS
++  None
++
++NOTE
++  None
++
++=============================================================================*/
++unsigned long sh_smem_get_fota_boot_mode( void )
++{
++    if (p_sharp_smem_common_type == NULL) {
++        p_sharp_smem_common_type = sh_smem_get_common_address();
++    }
++    
++    return p_sharp_smem_common_type->fota_boot_mode;
++}
++EXPORT_SYMBOL(sh_smem_get_fota_boot_mode);
++
++/*=============================================================================
++
++FUNCTION sh_smem_get_pvs_flg
++
++DESCRIPTION
++
++DEPENDENCIES
++  None
++
++RETURN VALUE
++
++SIDE EFFECTS
++  None
++
++NOTE
++  None
++
++=============================================================================*/
++unsigned char sh_smem_get_pvs_flg( void )
++{
++    if (p_sharp_smem_common_type == NULL) {
++        p_sharp_smem_common_type = sh_smem_get_common_address();
++    }
++    
++    return p_sharp_smem_common_type->sh_pvs_flg;
++}
++EXPORT_SYMBOL(sh_smem_get_pvs_flg);
++
+diff --git a/drivers/sharp/shsys/sh_systime.c b/drivers/sharp/shsys/sh_systime.c
+new file mode 100644
+index 0000000..c16ae27
+--- /dev/null
++++ b/drivers/sharp/shsys/sh_systime.c
+@@ -0,0 +1,255 @@
++/* drivers/sharp/shsys/sh_systime.c
++ *
++ * Copyright (C) 2012 Sharp Corporation
++ *
++ * This software is licensed under the terms of the GNU General Public
++ * License version 2, as published by the Free Software Foundation, and
++ * may be copied, distributed, and modified under those terms.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ */
++
++#include <linux/smp.h>
++#include <linux/sched.h>
++#include <linux/module.h>
++#include <linux/miscdevice.h>
++#include <linux/fs.h>
++#include <asm/uaccess.h>
++
++#include <linux/io.h>
++#include <asm/io.h>
++
++#include <sharp/sh_systime.h>
++
++static int timestamp_point = 0;
++
++static int sh_systime_set_timestamp(const char *val, struct kernel_param *kp)
++{
++    int ret;
++    sharp_smem_common_type *p_sh_smem_common_type = NULL;
++    unsigned long long systime = 0;
++    int i;
++
++    ret = param_set_int(val, kp);
++    if (ret)
++        return ret;
++
++    ret = sh_systime_read_current(&systime);
++    if (ret)
++        return ret;
++
++    p_sh_smem_common_type = sh_smem_get_common_address();
++    if (p_sh_smem_common_type != NULL) {
++        if ((timestamp_point == SHSYS_TIMEMSTAMP_SHUTDOWN_START) || (timestamp_point == SHSYS_TIMEMSTAMP_HOTBOOT_START)
++            || ((SHSYS_TIMEMSTAMP_FREE <= timestamp_point) && (timestamp_point < SHSYS_TIMEMSTAMP_MAX_NUM))) {
++            p_sh_smem_common_type->shsys_timestamp[timestamp_point] = systime;
++        }
++        else if (timestamp_point == SHSYS_TIMEMSTAMP_KEYGUARD_START) {
++            if (p_sh_smem_common_type->shsys_timestamp[timestamp_point] == 0) {
++                p_sh_smem_common_type->shsys_timestamp[timestamp_point] = systime;
++            }
++        }
++        else {
++            printk("=== Current shsys_timestamp list (MAX_NUM %d) ===\n", SHSYS_TIMEMSTAMP_MAX_NUM);
++            for (i = 0; i < SHSYS_TIMEMSTAMP_MAX_NUM; i++) {
++                printk("shsys_timestamp[%d] = %llu[us]\n", i, p_sh_smem_common_type->shsys_timestamp[i]);
++            }
++        }
++    }
++
++    return 0;
++}
++
++module_param_call(timestamp_point, sh_systime_set_timestamp, param_get_int, &timestamp_point, 0664);
++
++void sh_systime_log_shutdown_complete_time(void)
++{
++    int ret;
++    sharp_smem_common_type *p_sh_smem_common_type = NULL;
++    unsigned long long systime = 0;
++
++    p_sh_smem_common_type = sh_smem_get_common_address();
++    if (p_sh_smem_common_type != NULL) {
++        if (p_sh_smem_common_type->shsys_timestamp[SHSYS_TIMEMSTAMP_SHUTDOWN_START] == 0) {
++            return;
++        }
++
++        ret = sh_systime_read_current(&systime);
++        if (ret != 0) {
++            return;
++        }
++
++        if (systime >= p_sh_smem_common_type->shsys_timestamp[SHSYS_TIMEMSTAMP_SHUTDOWN_START]) {
++            systime = systime - p_sh_smem_common_type->shsys_timestamp[SHSYS_TIMEMSTAMP_SHUTDOWN_START];
++        }
++        else {
++            systime = systime + (0xFFFFFFFFFFFFFFFF - p_sh_smem_common_type->shsys_timestamp[SHSYS_TIMEMSTAMP_SHUTDOWN_START]);
++        }
++
++        p_sh_smem_common_type->shsys_timestamp[SHSYS_TIMEMSTAMP_SHUTDOWN_START] = 0;
++
++        printk("shutdown complete time %llu[us]\n", systime);
++    }
++}
++EXPORT_SYMBOL(sh_systime_log_shutdown_complete_time);
++
++static int sh_systime_open(struct inode *inode, struct file *filp)
++{
++    return 0;
++}
++
++int sh_systime_read_current(unsigned long long *systime)
++{
++    void __iomem *regadr = NULL;
++    unsigned int curr_timetick, last_timetick;
++
++    regadr = ioremap_nocache(TIMETICK_CLK_OFFSET, 4);
++    if (regadr != NULL) {
++        curr_timetick = ioread32(regadr);
++    }
++    else {
++        return -EFAULT;
++    }
++
++    /* Keep grabbing the time until a stable count is given */
++    do {
++        last_timetick = curr_timetick;
++        curr_timetick = ioread32(regadr);
++    } while (curr_timetick != last_timetick);
++
++    iounmap(regadr);
++
++    *systime = curr_timetick;
++    /* The following calculation is more exact than  "CALCULATE_TIMESTAMP" */
++    *systime *= 30517;
++    do_div(*systime, 1000);
++
++    return 0;
++}
++EXPORT_SYMBOL(sh_systime_read_current);
++
++static int sh_systime_read_timestamp(unsigned long long *timestamp)
++{
++    sharp_smem_common_type *p_sh_smem_common_type = NULL;
++    unsigned long long systime = 0;
++    int ret;
++
++    p_sh_smem_common_type = sh_smem_get_common_address();
++    if (p_sh_smem_common_type != NULL) {
++        if (p_sh_smem_common_type->shsys_timestamp[SHSYS_TIMEMSTAMP_BOOT_END] == 0) {
++            ret = sh_systime_read_current(&systime);
++            if (ret == 0) {
++                p_sh_smem_common_type->shsys_timestamp[SHSYS_TIMEMSTAMP_BOOT_END] = systime;
++            }
++        }
++        if (p_sh_smem_common_type->shsys_timestamp[SHSYS_TIMEMSTAMP_HOTBOOT_START] != 0) {
++            ret = sh_systime_read_current(&systime);
++            if (ret == 0) {
++                if (systime >= p_sh_smem_common_type->shsys_timestamp[SHSYS_TIMEMSTAMP_HOTBOOT_START]) {
++                    systime = systime - p_sh_smem_common_type->shsys_timestamp[SHSYS_TIMEMSTAMP_HOTBOOT_START];
++                }
++                else {
++                    systime = systime + (0xFFFFFFFFFFFFFFFF - p_sh_smem_common_type->shsys_timestamp[SHSYS_TIMEMSTAMP_HOTBOOT_START]);
++                }
++                p_sh_smem_common_type->shsys_timestamp[SHSYS_TIMEMSTAMP_HOTBOOT_COMP] = systime;
++                p_sh_smem_common_type->shsys_timestamp[SHSYS_TIMEMSTAMP_HOTBOOT_START] = 0;
++            }
++        }
++        memcpy(timestamp, p_sh_smem_common_type->shsys_timestamp, sizeof(p_sh_smem_common_type->shsys_timestamp));
++    }
++    else {
++        return -EFAULT;
++    }
++
++    return 0;
++}
++
++static ssize_t sh_systime_read(struct file *filp, char __user *buf, size_t count, loff_t *ppos)
++{
++    unsigned long long systime;
++    unsigned long long timestamp[32];
++    int ret;
++
++    if (count == sizeof(systime)) {
++        ret = sh_systime_read_current(&systime);
++        if (ret != 0) {
++            return ret;
++        }
++        if (copy_to_user(buf, (void *)&systime, count)) {
++            return -EFAULT;
++        }
++    }
++    else if (count == sizeof(timestamp)) {
++        ret = sh_systime_read_timestamp(timestamp);
++        if (ret != 0) {
++            return ret;
++        }
++        if (copy_to_user(buf, (void *)timestamp, count)) {
++            return -EFAULT;
++        }
++    }
++    else {
++        return -EFAULT;
++    }
++
++    return count;
++}
++
++static int sh_systime_release(struct inode *inode, struct file *filp)
++{
++    return 0;
++}
++
++static struct file_operations sh_systime_fops = {
++    .owner          = THIS_MODULE,
++    .open           = sh_systime_open,
++    .read           = sh_systime_read,
++    .release        = sh_systime_release,
++};
++
++static struct miscdevice sh_systime_dev = {
++    .minor = MISC_DYNAMIC_MINOR,
++    .name = "sh_systime",
++    .fops = &sh_systime_fops,
++};
++
++static int __init sh_systime_init( void )
++{
++    sharp_smem_common_type *p_sh_smem_common_type = NULL;
++    unsigned long long systime = 0;
++    unsigned long long t = 0;
++    int ret;
++
++    p_sh_smem_common_type = sh_smem_get_common_address();
++    if (p_sh_smem_common_type != NULL) {
++        ret = sh_systime_read_current(&systime);
++        t = cpu_clock(smp_processor_id());
++        if ((ret == 0) && (t != 0)) {
++            do_div(t, 1000);
++            p_sh_smem_common_type->shsys_timestamp[SHSYS_TIMEMSTAMP_KERNEL_START] = systime - t;
++        }
++        else {
++            printk("sh_systime_init: sh_systime_read_current() or cpu_clock() failed\n");
++        }
++    }
++    else {
++        printk("sh_systime_init: sh_smem_get_common_address() failed\n");
++    }
++
++    ret = misc_register(&sh_systime_dev);
++    if (ret != 0) {
++        printk("sh_systime_init: fail to misc_register ret %d\n", ret);
++    }
++
++    return ret;
++}
++
++module_init(sh_systime_init);
++
++MODULE_DESCRIPTION("sh_systime");
++MODULE_LICENSE("GPL v2");
++
+diff --git a/include/sharp/sh_gpio.h b/include/sharp/sh_gpio.h
+new file mode 100755
+index 0000000..3f938d6
+--- /dev/null
++++ b/include/sharp/sh_gpio.h
+@@ -0,0 +1,101 @@
++/* include/sharp/sh_gpio.h
++ *
++ * Copyright (C) 2012 Sharp Corporation
++ *
++ * This software is licensed under the terms of the GNU General Public
++ * License version 2, as published by the Free Software Foundation, and
++ * may be copied, distributed, and modified under those terms.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ */
++ 
++#ifndef __SH_GPIO_H__
++#define __SH_GPIO_H__
++
++#include <linux/types.h>
++#include <linux/ioctl.h>
++
++
++#define SH_GPIO_DEVFILE "/dev/sh_gpio"
++
++typedef struct {
++  uint32_t 	gpio;
++  uint8_t 	func;
++  uint8_t 	dir;
++  uint8_t 	pull;
++  uint8_t 	drvstr;
++  uint32_t 	outval;
++}sh_gpio_gpio_config;
++
++typedef struct {
++  uint32_t 	enable;
++  uint32_t 	trigger;
++}sh_gpio_gpioint_info;
++
++struct sh_gpio_read_write {
++/*
++ * LINUX/android/hardware/sharp/shsys/sysprobe/sysprobe_v01.h
++ */
++ 	uint32_t flag;										/* Update Flag */
++#define SH_GPIO_CONFIG_BIT_FLAG_FUNC_V01 	0x00000001	/* Function */
++#define SH_GPIO_CONFIG_BIT_FLAG_DIR_V01 	0x00000002	/* Direction */
++#define SH_GPIO_CONFIG_BIT_FLAG_PULL_V01 	0x00000004	/* Pull */
++#define SH_GPIO_CONFIG_BIT_FLAG_DRIVE_V01 	0x00000008	/* DriverStrength */
++#define SH_GPIO_CONFIG_BIT_FLAG_RMT_V01 	0x00000010	/* OutValue */
++
++	sh_gpio_gpio_config  	gpio_config	;	/* Config */
++	sh_gpio_gpioint_info	gpioint_info;  	/* GPIO Int */
++};
++
++/*
++ * PMIC-GPIO/MPP
++ */
++struct sh_pm_gpio {
++  	uint32_t 	gpio;
++	int			direction;
++	int			output_buffer;
++	int			output_value;
++	int			pull;
++	int			vin_sel;
++	int			out_strength;
++	int			function;
++	int			inv_int_pol;
++	int			disable_pin;
++};
++struct sh_pm8xxx_mpp_config_data {
++  	uint32_t 	gpio;
++	int			output_value;
++	unsigned	type;
++	unsigned	level;
++	unsigned	control;
++};
++
++struct sh_qpnp_gpio {
++  	uint32_t 	gpio;
++	int			mode		;
++	int			output_type	;
++	int			invert		;
++	int			pull		;
++	int			vin_sel		;
++	int			out_strength;
++	int			src_sel		;
++	int			master_en	;
++	int			aout_ref	;
++	int			ain_route	;
++	int			cs_out		;
++};
++#define SH_GPIO_IOCTL (0x91) /* Magic number for SH_GPIO Iocts */
++
++#define SH_GPIO_READ  				_IOR(SH_GPIO_IOCTL, 0x1, struct sh_gpio_read_write)
++#define SH_GPIO_WRITE 				_IOW(SH_GPIO_IOCTL, 0x2, struct sh_gpio_read_write)
++#define SH_GPIO_READ_PMIC_GPIO  	_IOR(SH_GPIO_IOCTL, 0x3, struct sh_qpnp_gpio)
++#define SH_GPIO_WRITE_PMIC_GPIO 	_IOW(SH_GPIO_IOCTL, 0x4, struct sh_qpnp_gpio)
++#define SH_GPIO_READ_PMIC_MPP  		_IOR(SH_GPIO_IOCTL, 0x5, struct sh_pm8xxx_mpp_config_data)
++#define SH_GPIO_WRITE_PMIC_MPP 		_IOW(SH_GPIO_IOCTL, 0x6, struct sh_pm8xxx_mpp_config_data)
++
++
++#endif // __SH_GPIO_H__
+diff --git a/include/sharp/sh_regaxs.h b/include/sharp/sh_regaxs.h
+new file mode 100755
+index 0000000..1040708
+--- /dev/null
++++ b/include/sharp/sh_regaxs.h
+@@ -0,0 +1,36 @@
++/* include/sharp/sh_regaxs.h
++ *
++ * Copyright (C) 2012 Sharp Corporation
++ *
++ * This software is licensed under the terms of the GNU General Public
++ * License version 2, as published by the Free Software Foundation, and
++ * may be copied, distributed, and modified under those terms.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ */
++ 
++#ifndef __SH_REGAXS_H__
++#define __SH_REGAXS_H__
++
++#include <linux/types.h>
++#include <linux/ioctl.h>
++
++
++#define SH_REGAXS_DEVFILE "/dev/sh_regaxs"
++
++struct sh_regaxs_read_write {
++    /* Memory address or register address depending on ioctl */
++    unsigned int physaddr;
++    unsigned int data;
++};
++
++#define SH_REGAXS_IOCTL (0x81) /* Magic number for SH_REGAXS Iocts */
++
++#define SH_REGAXS_READ  _IOR(SH_REGAXS_IOCTL, 0x1, struct sh_regaxs_read_write)
++#define SH_REGAXS_WRITE _IOW(SH_REGAXS_IOCTL, 0x2, struct sh_regaxs_read_write)
++
++#endif // __SH_REGAXS_H__
+diff --git a/include/sharp/sh_sleeplog.h b/include/sharp/sh_sleeplog.h
+new file mode 100644
+index 0000000..8e4409d
+--- /dev/null
++++ b/include/sharp/sh_sleeplog.h
+@@ -0,0 +1,41 @@
++/* include/sharp/sh_sleeplog.h
++ *
++ * Copyright (c) 2013, Sharp Corporation. All rights reserved.
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License version 2 and
++ * only version 2 as published by the Free Software Foundation.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ */
++#ifndef _SH_DEBUGDUMP_H
++#define _SH_DEBUGDUMP_H
++
++#include <linux/android_alarm.h>
++#include <linux/time.h>
++#include <linux/suspend.h>
++#include <linux/sched.h>
++#include <asm/current.h>
++
++#define UID_STATS_MAX_PROCESS_NAME 32
++
++void sh_count_mark_alarm(enum android_alarm_type alarm_type, int function);
++void sh_count_gic_counter(int irq);
++void sh_count_irq_counter(int irq);
++void sh_count_irq_if_pmic_wakeup(int irq);
++int64_t sh_get_pm_stats_suspend(void);
++int64_t sh_get_pm_stats_idle(void);
++void sh_set_screen_state(struct timespec ts, suspend_state_t state);
++
++void sh_write_buffer_wakeup_sources(char *buffer);
++void sh_write_buffer_wakeup_sources_internal(
++	char *buffer, struct list_head *wakeup_sources);
++void sh_write_buffer_uid_stat(char *buffer);
++char *sh_write_buffer_uid_stat_internal(char *buffer,
++	uid_t uid, char *process_name, unsigned int tcp_rcv, unsigned int tcp_snd);
++void sh_get_process_name(struct task_struct *task, char *result_name);
++
++#endif  /* _SH_DEBUGDUMP_H */
+diff --git a/include/sharp/sh_sleeptest.h b/include/sharp/sh_sleeptest.h
+new file mode 100644
+index 0000000..052c205
+--- /dev/null
++++ b/include/sharp/sh_sleeptest.h
+@@ -0,0 +1,21 @@
++/* include/sharp/sh_sleeptest.h
++ *
++ * Copyright (C) 2012 SHARP CORPORATION
++ *
++ * This software is licensed under the terms of the GNU General Public
++ * License version 2, as published by the Free Software Foundation, and
++ * may be copied, distributed, and modified under those terms.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ */
++
++#ifndef _SHSLEEPTEST_H_
++#define _SHSLEEPTEST_H_
++
++int sleep_test_is_enabled(void);
++
++#endif /* _SHSLEEPTEST_H_ */
+diff --git a/include/sharp/sh_smem.h b/include/sharp/sh_smem.h
+new file mode 100644
+index 0000000..048bff0
+--- /dev/null
++++ b/include/sharp/sh_smem.h
+@@ -0,0 +1,114 @@
++/* include/sharp/sh_smem.h
++ *
++ * Copyright (C) 2011 Sharp Corporation
++ *
++ * This software is licensed under the terms of the GNU General Public
++ * License version 2, as published by the Free Software Foundation, and
++ * may be copied, distributed, and modified under those terms.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ */
++
++/* 
++ * AMSS/LINUX common SH_SMEM structure definition
++ * 
++ * [The file path which must synchronize]
++ *  adsp_proc/core/sharp/shsys/inc/sh_smem.h
++ *  boot_images/core/sharp/shsys/inc/sh_smem.h
++ *  LINUX/android/kernel/include/sharp/sh_smem.h
++ *  modem_proc/core/sharp/shsys/inc/sh_smem.h
++ */
++typedef struct 
++{
++    unsigned long       shdisp_data_buf[38944];      /* Buffer for shdisp */
++    unsigned char       shusb_softupdate_mode_flag;  /* softupdate mode flag */
++    unsigned long       sh_filesystem_init;          /* file system innitialize flag */
++    int                 sh_sleep_test_mode;          /* sleep test mode flag */
++    unsigned char       shusb_qxdm_ena_flag;         /* QXDM enable flag */
++    unsigned char       shusb_usb_charge_ena_flag;   /* USB charge enable flag */
++    unsigned long       fota_boot_mode;              /* FOTA mode information */
++    unsigned char       conf_clrvari[4];             /* Color Variations information */
++    unsigned long       shdiag_FlagData;             /* shdiag flag information */
++    unsigned short      shdiag_BootMode;             /* shdiag Powerup mode */
++    unsigned char       shdiag_FirstBoot;            /* shdiag FirstBoot information */
++    unsigned char       shdiag_AdjChashe[16];        /* shdiag Adj chashe information */
++    unsigned short      shdiag_TpsBaseLineTbl[1000]; /* Touch adjustment */
++    unsigned char       sh_100hflg;                  /* 100 hours test flag */
++    unsigned short      shdiag_proxadj[2];           /* Proximity sensor adjust */
++    unsigned char       shdiag_fullchgflg;           /* Full charge FLG(F Only) */
++    char                shdiag_debugflg;             /* Debug FLG */
++    char                shdiag_factoryflg;           /* Factory FLG */
++    unsigned long long  shsys_timestamp[32];         /* System Timestamp */
++    unsigned long       sh_hw_revision;              /* hardware revision number */
++    unsigned char       sh_hw_handset;               /* Handset FLG */
++    unsigned long       sh_boot_mode;                /* power up mode information */
++    unsigned long       sh_boot_key;                 /* key(s) ditected OSBL */
++    unsigned long       sh_pwr_on_status;            /* power on status information from pmic */
++    char                sh_sbl_version[8];           /* sbl Version */
++    unsigned char       pImeiData[16];               /* W-CDMA Imei data */
++    unsigned char       shdiag_tspdrv_acal_data[3];  /* Haptics LRA control IC AutoCalibration result */
++    unsigned char       sh_pvs_flg;                  /* PVS flag */
++    int                 shpwr_battery_present;       /* PWR:battery present */
++    int                 shpwr_battery_voltage;       /* PWR:battery voltage */
++    int                 shpwr_battery_temperature;   /* PWR:battery temperature */
++    int                 shpwr_cable_status;          /* PWR:cable status */
++    int                 shpwr_fuel_data[4];          /* PWR:fuel gauge correction value */
++    int                 shpwr_vbat_data[4];          /* PWR:battery A/D converter  correction value */
++    unsigned char       shpwr_batauthflg;            /* PWR:battery ID Authentication plug infomation */
++    unsigned char       sh_camOtpData[10240];        /* Camera Production adjustment Data */
++    unsigned char       shdiag_charge_th_high[8];    /* ChageLimitMax */
++    unsigned char       shdiag_charge_th_low[8];     /* ChageLimitMin */
++    unsigned char       shdarea_WlanMacAddress[6];   /* WLAN Mac Address */
++    unsigned char       shtps_fwup_flag;             /* Touch panel firmware update flag */
++    unsigned char       shdiag_rvcflg;               /* Condenser judge flag */
++} sharp_smem_common_type;
++
++#define SH_SMEM_COMMON_SIZE 256000
++
++
++/*=============================================================================
++
++FUNCTION sh_smem_get_common_address
++
++=============================================================================*/
++sharp_smem_common_type *sh_smem_get_common_address( void );
++
++/*=============================================================================
++
++FUNCTION sh_smem_get_sleep_power_collapse_disabled_address
++
++=============================================================================*/
++unsigned long *sh_smem_get_sleep_power_collapse_disabled_address( void );
++
++/*=============================================================================
++
++FUNCTION sh_smem_get_100hflg
++
++=============================================================================*/
++unsigned char sh_smem_get_100hflg( void );
++
++/*=============================================================================
++
++FUNCTION sh_smem_get_softupdate_flg
++
++=============================================================================*/
++unsigned char sh_smem_get_softupdate_flg( void );
++
++/*=============================================================================
++
++FUNCTION sh_smem_get_fota_boot_mode
++
++=============================================================================*/
++unsigned long sh_smem_get_fota_boot_mode( void );
++
++/*=============================================================================
++
++FUNCTION sh_smem_get_pvs_flg
++
++=============================================================================*/
++unsigned char sh_smem_get_pvs_flg( void );
++
+diff --git a/include/sharp/sh_systime.h b/include/sharp/sh_systime.h
+new file mode 100644
+index 0000000..ea66f69
+--- /dev/null
++++ b/include/sharp/sh_systime.h
+@@ -0,0 +1,165 @@
++/* include/sharp/sh_systime.h
++ *
++ * Copyright (C) 2013 Sharp Corporation
++ *
++ * This software is licensed under the terms of the GNU General Public
++ * License version 2, as published by the Free Software Foundation, and
++ * may be copied, distributed, and modified under those terms.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ */
++
++
++#include <sharp/sh_smem.h>
++
++
++/* 
++ * ref. boot_images/core/boot/secboot3/hw/msm8974/msmhwioreg.h
++ *
++ * #define HWIO_MPM2_MPM_SLEEP_TIMETICK_COUNT_VAL_ADDR
++ *
++ */
++#define TIMETICK_CLK_OFFSET 0xFC4A3000
++
++
++/* 
++ * ref. boot_images/core/boot/secboot3/hw/msm8974/boot_target.h
++ *
++ * >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> 
++ */
++
++/*=========================================================================== 
++  Clock frequency is 32.768 KHz
++  The number of microseconds per cycle is:
++  1 / (32.768 KHz) = 30.52ms
++  The int part is 30
++===========================================================================*/
++#define TIMETICK_CLK_SPEED_INT       30
++
++/*=========================================================================== 
++  Clock frequency is 32.768 KHz
++  The number of microseconds per cycle is:
++  1 / (32.768 KHz) = 30.52ms
++  we round 0.52 to 1/2.
++  Timestamp is calculated as : count*int + count/2
++  Floating point arithmetic should not be used to avoid error and speed penalty
++===========================================================================*/
++#define CALCULATE_TIMESTAMP(COUNT) \
++  ((COUNT)*TIMETICK_CLK_SPEED_INT + (COUNT)/2)
++
++/* 
++ * <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< 
++ */
++
++
++/* 
++ * ref. LINUX/android/bootable/bootloader/lk/platform/msm8974/include/platform/iomap.h
++ */
++#define MSM_SHARED_BASE             0x0FA00000
++
++/* 
++ * ref. LINUX/android/bootable/bootloader/lk/platform/msm_shared/smem.h
++ *
++ * >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> 
++ */
++#ifndef __PLATFORM_MSM_SHARED_SMEM_H
++struct smem_proc_comm {
++	unsigned command;
++	unsigned status;
++	unsigned data1;
++	unsigned data2;
++};
++
++struct smem_heap_info {
++	unsigned initialized;
++	unsigned free_offset;
++	unsigned heap_remaining;
++	unsigned reserved;
++};
++
++struct smem_alloc_info {
++	unsigned allocated;
++	unsigned offset;
++	unsigned size;
++	unsigned reserved;
++};
++
++typedef enum {
++	SMEM_SPINLOCK_ARRAY = 7,
++
++	SMEM_AARM_PARTITION_TABLE = 9,
++
++	SMEM_SLEEP_POWER_COLLAPSE_DISABLED = 89,
++
++	SMEM_APPS_BOOT_MODE = 106,
++
++	SMEM_SHARP_ID_LOCATION = 134,
++
++	SMEM_BOARD_INFO_LOCATION = 137,
++
++	SMEM_USABLE_RAM_PARTITION_TABLE = 402,
++
++	SMEM_POWER_ON_STATUS_INFO = 403,
++
++	SMEM_RLOCK_AREA = 404,
++
++	SMEM_BOOT_INFO_FOR_APPS = 418,
++
++	SMEM_FIRST_VALID_TYPE = SMEM_SPINLOCK_ARRAY,
++	SMEM_LAST_VALID_TYPE = SMEM_BOOT_INFO_FOR_APPS,
++
++	SMEM_MAX_SIZE = SMEM_BOOT_INFO_FOR_APPS + 1,
++} smem_mem_type_t;
++
++struct smem {
++	struct smem_proc_comm proc_comm[4];
++	unsigned version_info[32];
++	struct smem_heap_info heap_info;
++	struct smem_alloc_info alloc_info[SMEM_MAX_SIZE];
++};
++#endif				/* __PLATFORM_MSM_SHARED_SMEM_H */
++/* 
++ * <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< 
++ */
++
++
++typedef enum
++{
++  SHSYS_TIMEMSTAMP_SBL1_START = 0,
++  SHSYS_TIMEMSTAMP_SBL1_END,
++  SHSYS_TIMEMSTAMP_APPSBL_START,
++  SHSYS_TIMEMSTAMP_APPSBL_END,
++  SHSYS_TIMEMSTAMP_DECOMPRESS_START,
++  SHSYS_TIMEMSTAMP_DECOMPRESS_END,
++  SHSYS_TIMEMSTAMP_KERNEL_START,
++  SHSYS_TIMEMSTAMP_BOOT_END,
++  SHSYS_TIMEMSTAMP_SHUTDOWN_START = 12,
++  SHSYS_TIMEMSTAMP_HOTBOOT_START = 13,
++  SHSYS_TIMEMSTAMP_HOTBOOT_COMP,
++  SHSYS_TIMEMSTAMP_KEYGUARD_START = 15,
++
++  SHSYS_TIMEMSTAMP_FREE,
++
++  SHSYS_TIMEMSTAMP_MAX_NUM = 32
++}SHSYS_TIMEMSTAMP_POINT;
++
++
++#define SH_SMEM_ALLOCINFO \
++     (struct smem_alloc_info *)(&(((struct smem *)((void *)(MSM_SHARED_BASE)))->alloc_info[SMEM_SHARP_ID_LOCATION]))
++
++#define SH_SMEM_OFFSET \
++     (sharp_smem_common_type *)((void *)(MSM_SHARED_BASE + *(volatile unsigned *)(&(SH_SMEM_ALLOCINFO)->offset)))
++
++#define SET_SHSYS_TIMESTAMP(point) \
++    if (*(volatile unsigned *)(&(SH_SMEM_ALLOCINFO)->allocated)) { \
++        (SH_SMEM_OFFSET)->shsys_timestamp[point] = CALCULATE_TIMESTAMP(*(volatile unsigned *)TIMETICK_CLK_OFFSET); \
++    }
++
++
++int sh_systime_read_current(unsigned long long *systime);
++void sh_systime_log_shutdown_complete_time(void);
++
+-- 
+2.10.0
+

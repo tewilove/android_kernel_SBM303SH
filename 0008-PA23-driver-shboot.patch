@@ -1,0 +1,402 @@
+From a2a85d12dd5aa9c5c644ccb2a25169167edce570 Mon Sep 17 00:00:00 2001
+From: tewilove <tewilove@gmail.com>
+Date: Mon, 17 Oct 2016 12:33:47 +0800
+Subject: [PATCH 08/13] PA23: driver: shboot
+
+Change-Id: I99aa085f09f920695d8b7495838e60e355a47754
+---
+ drivers/Makefile                       |   1 +
+ drivers/sharp/shboot/Makefile          |   2 +
+ drivers/sharp/shboot/sh_boot_manager.c | 229 +++++++++++++++++++++++++++++++++
+ drivers/sharp/shboot/sh_ddrinfo.c      |  78 +++++++++++
+ include/sharp/sh_boot_manager.h        |  39 ++++++
+ 5 files changed, 349 insertions(+)
+ create mode 100644 drivers/sharp/shboot/Makefile
+ create mode 100644 drivers/sharp/shboot/sh_boot_manager.c
+ create mode 100644 drivers/sharp/shboot/sh_ddrinfo.c
+ create mode 100755 include/sharp/sh_boot_manager.h
+
+diff --git a/drivers/Makefile b/drivers/Makefile
+index c873e6d..72d259c 100644
+--- a/drivers/Makefile
++++ b/drivers/Makefile
+@@ -148,3 +148,4 @@ obj-$(CONFIG_SENSORS)		+= sensors/
+ 
+ # SHARP
+ obj-$(CONFIG_SHSYS_CUST) += sharp/shsys/
++obj-$(CONFIG_SHSYS_CUST) += sharp/shboot/
+diff --git a/drivers/sharp/shboot/Makefile b/drivers/sharp/shboot/Makefile
+new file mode 100644
+index 0000000..9b1f8ef
+--- /dev/null
++++ b/drivers/sharp/shboot/Makefile
+@@ -0,0 +1,2 @@
++obj-$(CONFIG_SHBOOT_CUST) += sh_boot_manager.o
++obj-$(CONFIG_SHBOOT_CUST) += sh_ddrinfo.o
+diff --git a/drivers/sharp/shboot/sh_boot_manager.c b/drivers/sharp/shboot/sh_boot_manager.c
+new file mode 100644
+index 0000000..3f6e81f
+--- /dev/null
++++ b/drivers/sharp/shboot/sh_boot_manager.c
+@@ -0,0 +1,229 @@
++/* drivers/sharp/shboot/sh_boot_manager.c
++ *
++ * Copyright (C) 2013 Sharp Corporation
++ *
++ * This software is licensed under the terms of the GNU General Public
++ * License version 2, as published by the Free Software Foundation, and
++ * may be copied, distributed, and modified under those terms.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ */
++
++/*===========================================================================
++INCLUDE
++===========================================================================*/
++#include <linux/module.h>
++#include <sharp/sh_smem.h>
++#include <sharp/sh_boot_manager.h>
++
++/*===========================================================================
++DEFINE
++===========================================================================*/
++
++/*===========================================================================
++PROTOTYPES
++===========================================================================*/
++static int sh_boot_get_bootmode_to_user(char *buffer, const struct kernel_param *kp);
++static int sh_boot_set_bootmode_from_user(const char *buffer, const struct kernel_param *kp);
++static int sh_boot_get_handset_to_user(char *buffer, const struct kernel_param *kp);
++
++/*===========================================================================
++GLOBAL VARIABLES
++===========================================================================*/
++static unsigned long boot_mode = 0;
++static unsigned char handset = 0;
++static struct kernel_param_ops param_ops_bootmode = {
++	.get = sh_boot_get_bootmode_to_user,
++	.set = sh_boot_set_bootmode_from_user,
++};
++static struct kernel_param_ops param_ops_handset = {
++	.get = sh_boot_get_handset_to_user,
++};
++static unsigned long recovery_boot;
++
++/*=============================================================================
++FUNCTION
++=============================================================================*/
++unsigned short sh_boot_get_hw_revision(void)
++{
++	sharp_smem_common_type *p_sharp_smem_common_type;
++
++	p_sharp_smem_common_type = sh_smem_get_common_address();
++	if( p_sharp_smem_common_type != 0 )
++	{
++		return p_sharp_smem_common_type->sh_hw_revision;
++	}else{
++		return 0xFF;
++	}
++}
++
++unsigned long sh_boot_get_bootmode(void)
++{
++	sharp_smem_common_type *p_sharp_smem_common_type;
++
++	p_sharp_smem_common_type  = sh_smem_get_common_address();
++	if( p_sharp_smem_common_type != 0 )
++	{
++		return p_sharp_smem_common_type->sh_boot_mode;
++	}else{
++		return 0;
++	}
++}
++
++unsigned char sh_boot_get_handset(void)
++{
++    sharp_smem_common_type *p_sharp_smem_common_type;
++    
++    p_sharp_smem_common_type  = sh_smem_get_common_address();
++	if( p_sharp_smem_common_type != 0 )
++	{
++    	return p_sharp_smem_common_type->sh_hw_handset;
++	}else{
++		return 0;
++	}
++}
++
++static void sh_boot_set_bootmode(unsigned short mode)
++{
++	sharp_smem_common_type *p_sharp_smem_common_type;
++
++	p_sharp_smem_common_type = sh_smem_get_common_address();
++	if (p_sharp_smem_common_type != 0)
++		p_sharp_smem_common_type->sh_boot_mode = mode;
++}
++
++MODULE_DESCRIPTION("SH Boot Manager");
++MODULE_LICENSE("GPL v2");
++MODULE_AUTHOR("SHARP CORPORATION");
++MODULE_VERSION("1.0");
++
++/*=============================================================================
++
++FUNCTION sh_boot_get_bootmode_to_user
++
++DESCRIPTION
++
++DEPENDENCIES
++  None
++
++RETURN VALUE
++
++SIDE EFFECTS
++  None
++
++NOTE
++  None
++
++=============================================================================*/
++static int sh_boot_get_bootmode_to_user(char *buffer, const struct kernel_param *kp)
++{
++	int ret = 0;
++
++	boot_mode = sh_boot_get_bootmode();
++	ret = param_get_int(buffer, kp);
++
++	return ret;
++}
++
++/*=============================================================================
++
++FUNCTION sh_boot_set_bootmode_from_user
++
++DESCRIPTION
++
++DEPENDENCIES
++  None
++
++RETURN VALUE
++
++SIDE EFFECTS
++  None
++
++NOTE
++  None
++
++=============================================================================*/
++static int sh_boot_set_bootmode_from_user(const char *buffer, const struct kernel_param *kp)
++{
++	int ret = -EINVAL;
++	unsigned long mode;
++
++	if (strict_strtoul(buffer, 0, &mode) == 0) {
++		switch (mode) {
++		case SH_BOOT_O_C:
++		case SH_BOOT_NORMAL:
++			boot_mode = mode;
++			sh_boot_set_bootmode(boot_mode);
++			ret = 0;
++			break;
++		default:
++			break;
++		}
++	}
++
++	return ret;
++}
++module_param_cb(boot_mode, &param_ops_bootmode, &boot_mode, 0644);
++
++/*=============================================================================
++
++FUNCTION is_recovery_boot
++
++DESCRIPTION
++
++DEPENDENCIES
++  None
++
++RETURN VALUE
++
++SIDE EFFECTS
++  None
++
++NOTE
++  None
++
++=============================================================================*/
++int is_recovery_boot(void)
++{
++	return (recovery_boot) ? 1 : 0;
++}
++
++static int __init parse_recovery_boot(char *str)
++{
++	recovery_boot = simple_strtoul(str, NULL, 0);
++	return 0;
++}
++early_param("androidboot.recovery", parse_recovery_boot);
++
++/*=============================================================================
++
++FUNCTION sh_boot_get_handset_to_user
++
++DESCRIPTION
++
++DEPENDENCIES
++  None
++
++RETURN VALUE
++
++SIDE EFFECTS
++  None
++
++NOTE
++  None
++
++=============================================================================*/
++static int sh_boot_get_handset_to_user(char *buffer, const struct kernel_param *kp)
++{
++	int ret = 0;
++
++	handset = sh_boot_get_handset();
++	ret = param_get_int(buffer, kp);
++
++	return ret;
++}
++module_param_cb(handset, &param_ops_handset, &handset, 0644);
+diff --git a/drivers/sharp/shboot/sh_ddrinfo.c b/drivers/sharp/shboot/sh_ddrinfo.c
+new file mode 100644
+index 0000000..03de233
+--- /dev/null
++++ b/drivers/sharp/shboot/sh_ddrinfo.c
+@@ -0,0 +1,78 @@
++/* drivers/sharp/shboot/sh_ddrinfo.c
++ *
++ * Copyright (C) 2013 Sharp Corporation
++ *
++ * This software is licensed under the terms of the GNU General Public
++ * License version 2, as published by the Free Software Foundation, and
++ * may be copied, distributed, and modified under those terms.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ */
++
++#include <linux/module.h>
++#include <linux/moduleparam.h>
++#include <linux/delay.h>
++#include <linux/io.h>
++#include <asm/io.h>
++
++#ifdef CONFIG_ANDROID_ENGINEERING
++#define EBICS0_MR4_CMD	0x00A80014
++#define EBICS0_MR4_RES	0x00A80020
++
++static unsigned int sdram_temp;
++
++static unsigned int get_sdram_temp(void)
++{
++	unsigned int stat;
++	unsigned int count = 0;
++	unsigned int ret = 0;
++	void __iomem *regadr = NULL;
++
++	regadr = ioremap_nocache(EBICS0_MR4_CMD, 4);
++	iowrite32(0x04060000, regadr);
++
++	while (1) {
++		udelay(1);
++		stat = ioread32(regadr);
++		pr_debug("%s() status %d\n", __func__, stat);
++		if (!(stat & BIT(17)))
++			break;
++		if (count++ > 1000) {
++			pr_err("%s() timeout 1 sec\n", __func__);
++			goto sdram_error;
++		}
++	}
++
++	if (regadr != NULL)
++		iounmap(regadr);
++
++	regadr = ioremap_nocache(EBICS0_MR4_RES, 4);
++	ret = ioread32(regadr);
++	if (regadr != NULL)
++		iounmap(regadr);
++sdram_error:
++	pr_debug("%s() return %d\n", __func__, ret);
++	return ret;
++}
++
++static int get_sdram_temp_to_user(char *buf, const struct kernel_param *kp)
++{
++	sdram_temp = get_sdram_temp();
++	return param_get_uint(buf, kp);
++}
++
++static struct kernel_param_ops param_ops_sdram_temp = {
++	.get = get_sdram_temp_to_user,
++};
++
++module_param_cb(ramtemp, &param_ops_sdram_temp, &sdram_temp, S_IRUGO);
++
++#endif /* CONFIG_ANDROID_ENGINEERING */
++
++MODULE_LICENSE("GPL v2");
++MODULE_AUTHOR("Sharp Corporation");
++MODULE_DESCRIPTION("DDR information driver");
+diff --git a/include/sharp/sh_boot_manager.h b/include/sharp/sh_boot_manager.h
+new file mode 100755
+index 0000000..ec687de
+--- /dev/null
++++ b/include/sharp/sh_boot_manager.h
+@@ -0,0 +1,39 @@
++/* include/sharp/sh_boot_manager.h
++ *
++ * Copyright (C) 2013 Sharp Corporation
++ *
++ * This software is licensed under the terms of the GNU General Public
++ * License version 2, as published by the Free Software Foundation, and
++ * may be copied, distributed, and modified under those terms.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ */
++
++#ifndef SH_BOOT_MANAGER_H
++#define SH_BOOT_MANAGER_H
++/*===========================================================================
++INCLUDE
++===========================================================================*/
++
++/*===========================================================================
++DEFINE
++===========================================================================*/
++#define	SH_BOOT_O_C    0x20
++#define	SH_BOOT_U_O_C  0x21
++#define	SH_BOOT_D      0x40
++#define	SH_BOOT_F_F    0x44
++#define SH_BOOT_NORMAL 0xFFFF
++
++/*===========================================================================
++FUNCTION
++===========================================================================*/
++unsigned short sh_boot_get_hw_revision(void);
++unsigned long sh_boot_get_bootmode(void);
++int is_recovery_boot(void);
++unsigned char sh_boot_get_handset(void);
++
++#endif /* SH_BOOT_MANAGER_H */
+-- 
+2.10.0
+

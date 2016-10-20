@@ -1,0 +1,98 @@
+From cd855d6287c3f569d0875fbf634a03e914294cd3 Mon Sep 17 00:00:00 2001
+From: tewilove <tewilove@gmail.com>
+Date: Mon, 17 Oct 2016 11:59:10 +0800
+Subject: [PATCH 01/13] PA23: minium device tree
+
+Change-Id: I82c3a3eb479dff56385d95ca2a4cdc17a19f5361
+---
+ arch/arm/boot/dts/sharp-pa23-msm8974-v2.0-1.dts | 24 ++++++++++++++++++++++++
+ arch/arm/boot/dts/sharp-pa23-msm8974-v2.2.dts   | 24 ++++++++++++++++++++++++
+ arch/arm/boot/dts/sharp-pa23.dtsi               | 14 ++++++++++++++
+ 3 files changed, 62 insertions(+)
+ create mode 100644 arch/arm/boot/dts/sharp-pa23-msm8974-v2.0-1.dts
+ create mode 100644 arch/arm/boot/dts/sharp-pa23-msm8974-v2.2.dts
+ create mode 100644 arch/arm/boot/dts/sharp-pa23.dtsi
+
+diff --git a/arch/arm/boot/dts/sharp-pa23-msm8974-v2.0-1.dts b/arch/arm/boot/dts/sharp-pa23-msm8974-v2.0-1.dts
+new file mode 100644
+index 0000000..6576640
+--- /dev/null
++++ b/arch/arm/boot/dts/sharp-pa23-msm8974-v2.0-1.dts
+@@ -0,0 +1,24 @@
++/* Copyright (c) 2013, The Linux Foundation. All rights reserved.
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License version 2 and
++ * only version 2 as published by the Free Software Foundation.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ */
++
++/dts-v1/;
++
++/include/ "msm8974-v2.0-1.dtsi"
++/include/ "sharp-pa23.dtsi"
++
++/ {
++	model = "sharp pa23 v2.0/1";
++	compatible = "qcom,sharp-pa23", "qcom,msm8974", "qcom,cdp";
++	qcom,msm-id = <126 37 0x20000>,
++		      <185 37 0x20000>,
++		      <186 37 0x20000>;
++};
+diff --git a/arch/arm/boot/dts/sharp-pa23-msm8974-v2.2.dts b/arch/arm/boot/dts/sharp-pa23-msm8974-v2.2.dts
+new file mode 100644
+index 0000000..21cd097
+--- /dev/null
++++ b/arch/arm/boot/dts/sharp-pa23-msm8974-v2.2.dts
+@@ -0,0 +1,24 @@
++/* Copyright (c) 2013, The Linux Foundation. All rights reserved.
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License version 2 and
++ * only version 2 as published by the Free Software Foundation.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ */
++
++/dts-v1/;
++
++/include/ "msm8974-v2.2.dtsi"
++/include/ "sharp-pa23.dtsi"
++
++/ {
++	model = "sharp pa23 v2.2";
++	compatible = "qcom,sharp-pa23", "qcom,msm8974", "qcom,cdp";
++	qcom,msm-id = <126 37 0x20002>,
++		      <185 37 0x20002>,
++		      <186 37 0x20002>;
++};
+diff --git a/arch/arm/boot/dts/sharp-pa23.dtsi b/arch/arm/boot/dts/sharp-pa23.dtsi
+new file mode 100644
+index 0000000..bc1fc17
+--- /dev/null
++++ b/arch/arm/boot/dts/sharp-pa23.dtsi
+@@ -0,0 +1,14 @@
++/* Copyright (c) 2012-2014, The Linux Foundation. All rights reserved.
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License version 2 and
++ * only version 2 as published by the Free Software Foundation.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ */
++
++/include/ "msm8974-leds.dtsi"
++
+-- 
+2.10.0
+

@@ -1,0 +1,26 @@
+From 4a42853a7f78e60b7ba9593e88fc1a8d47c01537 Mon Sep 17 00:00:00 2001
+From: tewilove <tewilove@gmail.com>
+Date: Fri, 14 Oct 2016 18:39:40 +0800
+Subject: [PATCH 06/13] AndroidKernel.mk: fix compilation
+
+Change-Id: I939edc94f67b4eabd34b9d17eccf6c8c1285d5f0
+---
+ AndroidKernel.mk | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/AndroidKernel.mk b/AndroidKernel.mk
+index 5d45883..2ebab6d 100644
+--- a/AndroidKernel.mk
++++ b/AndroidKernel.mk
+@@ -77,7 +77,7 @@ $(KERNEL_OUT)/piggy : $(TARGET_PREBUILT_INT_KERNEL)
+ 	$(hide) gunzip -c $(KERNEL_OUT)/arch/arm/boot/compressed/piggy.gzip > $(KERNEL_OUT)/piggy
+ 
+ $(TARGET_PREBUILT_INT_KERNEL): $(KERNEL_OUT) $(KERNEL_CONFIG) $(KERNEL_HEADERS_INSTALL)
+-	$(MAKE) -C kernel O=../$(KERNEL_OUT) ARCH=arm CROSS_COMPILE=arm-linux-androideabi-
++	$(MAKE) -C kernel O=../$(KERNEL_OUT) ARCH=arm CROSS_COMPILE=arm-linux-androideabi- zImage-dtb
+ 	$(MAKE) -C kernel O=../$(KERNEL_OUT) ARCH=arm CROSS_COMPILE=arm-linux-androideabi- modules
+ 	$(MAKE) -C kernel O=../$(KERNEL_OUT) INSTALL_MOD_PATH=../../$(KERNEL_MODULES_INSTALL) INSTALL_MOD_STRIP=1 ARCH=arm CROSS_COMPILE=arm-linux-androideabi- modules_install
+ 	$(mv-modules)
+-- 
+2.10.0
+
